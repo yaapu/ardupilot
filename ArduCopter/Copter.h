@@ -943,6 +943,10 @@ private:
     void userhook_auxSwitch2(uint8_t ch_flag);
     void userhook_auxSwitch3(uint8_t ch_flag);
 
+#if FRSKY_TELEM_ENABLED == ENABLED
+    void update_nav_info();
+#endif
+
 #include "mode.h"
 
     Mode *flightmode;

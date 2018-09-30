@@ -76,7 +76,6 @@ void AP_Frsky_Telem::init(const AP_SerialManager &serial_manager,
     }
 }
 
-
 /*
  * send telemetry data
  * for FrSky SPort Passthrough (OpenTX) protocol (X-receivers)
@@ -85,24 +84,20 @@ void AP_Frsky_Telem::send_SPort_Passthrough(void)
 {
     int16_t numc;
     numc = _port->available();
-
     // check if available is negative
     if (numc < 0) {
         return;
     }
-
     // this is the constant for hub data frame
     if (_port->txspace() < 19) {
         return;
     }
-
     // keep only the last two bytes of the data found in the serial buffer, as we shouldn't respond to old poll requests
     uint8_t prev_byte = 0;
     for (int16_t i = 0; i < numc; i++) {
         prev_byte = _passthrough.new_byte;
         _passthrough.new_byte = _port->read();
     }
-
     if ((prev_byte == START_STOP_SPORT) && (_passthrough.new_byte == SENSOR_ID_28)) { // byte 0x7E is the header of each poll request
         if (_passthrough.send_attiandrng) { // skip other data, send attitude (roll, pitch) and range only this iteration
             _passthrough.send_attiandrng = false; // next iteration, check if we should send something other
@@ -145,6 +140,16 @@ void AP_Frsky_Telem::send_SPort_Passthrough(void)
             if ((now - _passthrough.gps_status_timer) >= 1000) {
                 send_uint32(DIY_FIRST_ID+2, calc_gps_status());
                 _passthrough.gps_status_timer = AP_HAL::millis();
+                return;
+            }
+            if ((now - _passthrough.waypoint_timer) >= 1000) {
+                send_uint32(DIY_FIRST_ID+11, calc_wp());
+                _passthrough.waypoint_timer = AP_HAL::millis();
+                return;
+            }
+            if ((now - _passthrough.windspeed_timer) >= 1000) {
+                send_uint32(DIY_FIRST_ID+12, calc_windspeed());
+                _passthrough.windspeed_timer = AP_HAL::millis();
                 return;
             }
             if ((now - _passthrough.home_timer) >= 500) {
@@ -582,7 +587,7 @@ uint32_t AP_Frsky_Telem::calc_param(void)
     uint32_t param = 0;
 
     // cycle through paramIDs
-    if (_paramID >= 5) {
+    if (_paramID >= 6) {
         _paramID = 0;
     }
     _paramID++;
@@ -598,6 +603,9 @@ uint32_t AP_Frsky_Telem::calc_param(void)
         break;
     case 5:
         param = (uint32_t)roundf(_battery.pack_capacity_mah(1)); // battery pack capacity in mAh
+        break;
+    case 6:
+        param = (uint32_t)_nav_info.wp_count; // mission wp count
         break;
     }
     //Reserve first 8 bits for param ID, use other 24 bits to store parameter value
@@ -736,11 +744,15 @@ uint32_t AP_Frsky_Telem::calc_velandyaw(void)
 {
     uint32_t velandyaw;
     Vector3f velNED {};
-
-    // if we can't get velocity then we use zero for vertical velocity
-    _ahrs.get_velocity_NED(velNED);
+    float vspd;
+    // if we can't get velocity then we use baro climb rate
+    if (_ahrs.get_velocity_NED(velNED)) {
+        vspd = -velNED.z;
+    } else {
+        vspd = AP::baro().get_climb_rate();
+    }
     // vertical velocity in dm/s
-    velandyaw = prep_number(roundf(-velNED.z * 10), 2, 1);
+    velandyaw = prep_number(roundf(vspd * 10), 2, 1);
     // horizontal velocity in dm/s (use airspeed if available and enabled - even if not used - otherwise use groundspeed)
     const AP_Airspeed *aspeed = _ahrs.get_airspeed();
     if (aspeed && aspeed->enabled()) {        
@@ -771,6 +783,64 @@ uint32_t AP_Frsky_Telem::calc_attiandrng(void)
 }
 
 /*
+ * prepare waypoint and xtrack data
+ * for FrSky SPort Passthrough (OpenTX) protocol (X-receivers)
+*/
+uint32_t AP_Frsky_Telem::calc_wp(void)
+{
+    uint32_t waypoint;
+    //
+    waypoint = MIN(_nav_info.wp_number,WAYPOINT_NUMBER_LIMIT);
+    // max distance is 1023*100m = 102.3Km encoded as 10 bits + 2 for power
+    waypoint |= prep_number(MIN(_nav_info.wp_distance,WAYPOINT_DISTANCE_LIMIT),3,2) << WAYPOINT_DISTANCE_OFFSET;
+    // xtrack error, max is 150m encoded as 6bits: 5 + 10^power + sign
+    waypoint |= prep_number(MIN(_nav_info.wp_xtrack_error,WAYPOINT_XTRACK_LIMIT),1,1) << WAYPOINT_XTRACK_OFFSET;
+    const bool gotGPS = (AP::gps().status() >= AP_GPS::GPS_OK_FIX_2D);
+    //
+    if (gotGPS) {
+        const int32_t cog = AP::gps().ground_course_cd(); //cog in centidegrees
+        int32_t angle = wrap_360_cd(_nav_info.wp_bearing - cog);
+        int32_t interval = 36000 / WAYPOINT_ARROW_COUNT;
+        /*
+        if (_nav_info.wp_distance < 2.0f) {
+            //avoid fast rotating arrow at small distances
+            angle = 0;
+        }
+        */
+        waypoint |= (((angle + interval / 2) / interval) % WAYPOINT_ARROW_COUNT) << WAYPOINT_BEARING_OFFSET;
+    }
+    return waypoint;
+}
+
+/*
+ * prepare windspeed data
+ * for FrSky SPort Passthrough (OpenTX) protocol (X-receivers)
+ */
+/*
+    void AP_OSD_Screen::draw_wind(uint8_t x, uint8_t y)
+    {
+        AP_AHRS &ahrs = AP::ahrs();
+        Vector3f v = ahrs.wind_estimate();
+        if (check_option(AP_OSD::OPTION_INVERTED_WIND)) {
+            v = -v;
+        }
+        backend->write(x, y, false, "%c", SYM_WSPD);
+        draw_speed_vector(x + 1, y, Vector2f(v.x, v.y), ahrs.yaw_sensor);
+    }
+*/
+uint32_t AP_Frsky_Telem::calc_windspeed(void)
+{
+    uint32_t windspeed = 0;
+    return windspeed;
+}
+// set navigation information for display
+void AP_Frsky_Telem::set_nav_info(NavInfo &navinfo)
+{
+    // do this without a lock for now
+    _nav_info = navinfo;
+}
+
+/*
  * prepare value for transmission through FrSky link
  * for FrSky SPort Passthrough (OpenTX) protocol (X-receivers)
  */
@@ -779,7 +849,18 @@ uint16_t AP_Frsky_Telem::prep_number(int32_t number, uint8_t digits, uint8_t pow
     uint16_t res = 0;
     uint32_t abs_number = abs(number);
 
-    if ((digits == 2) && (power == 1)) { // number encoded on 8 bits: 7 bits for digits + 1 for 10^power
+    if ((digits == 1) && (power == 1)) { // number encoded on 5 bits: 4 bits for digits + 1 for 10^power
+        if (abs_number < 10) {
+            res = abs_number<<1;
+        } else if (abs_number < 150) {
+            res = ((uint8_t)roundf(abs_number * 0.1f)<<1)|0x1;
+        } else { // transmit max possible value (0x0F x 10^1 = 150)
+            res = 0x1F;
+        }
+        if (number < 0) { // if number is negative, add sign bit in front
+            res |= 0x1<<5;
+        }
+    } else if ((digits == 2) && (power == 1)) { // number encoded on 8 bits: 7 bits for digits + 1 for 10^power
         if (abs_number < 100) {
             res = abs_number<<1;
         } else if (abs_number < 1270) {

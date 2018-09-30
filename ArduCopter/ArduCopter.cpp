@@ -190,6 +190,9 @@ const AP_Scheduler::Task Copter::scheduler_tasks[] = {
 #if STATS_ENABLED == ENABLED
     SCHED_TASK_CLASS(AP_Stats,             &copter.g2.stats,            update,           1, 100),
 #endif
+#if FRSKY_TELEM_ENABLED == ENABLED
+    SCHED_TASK(update_nav_info, 1, 10),
+#endif
 };
 
 constexpr int8_t Copter::_failsafe_priorities[7];
@@ -572,5 +575,18 @@ void Copter::update_altitude()
         Log_Write_Control_Tuning();
     }
 }
+#if FRSKY_TELEM_ENABLED == ENABLED
+void Copter::update_nav_info()
+{
+    AP_Frsky_Telem::NavInfo nav_info;
+    nav_info.wp_distance = flightmode->wp_distance() * 1.0e-2f;
+    nav_info.wp_bearing = flightmode->wp_bearing();
+    nav_info.wp_xtrack_error = flightmode->crosstrack_error() * 1.0e-2f;
+    nav_info.wp_number = mission.get_current_nav_index();
+    nav_info.wp_count = mission.num_commands();    
+
+    frsky_telemetry.set_nav_info(nav_info);
+}
+#endif
 
 AP_HAL_MAIN_CALLBACKS(&copter);
