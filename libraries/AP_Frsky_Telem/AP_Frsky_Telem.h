@@ -220,10 +220,6 @@ private:
         uint32_t gps_latlng_timer;
         uint32_t waypoint_timer;
         uint32_t windspeed_timer;
-#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
-        uint32_t rx_polling_timer;
-        uint32_t fake_rssi_timer;
-#endif
     } _passthrough;
     
     struct
@@ -250,9 +246,6 @@ private:
     
     struct NavInfo _nav_info;
 
-#ifdef YAAPU_USE_THREAD
-    void frsky_thread(void);
-#endif
     // main transmission function when protocol is FrSky SPort Passthrough (OpenTX)
     void send_SPort_Passthrough(void);
     // main transmission function when protocol is FrSky SPort
