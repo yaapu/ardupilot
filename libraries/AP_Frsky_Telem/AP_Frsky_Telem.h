@@ -108,7 +108,9 @@ for FrSky SPort Passthrough
 #define ATTIANDRNG_PITCH_LIMIT      0x3FF
 #define ATTIANDRNG_PITCH_OFFSET     11
 #define ATTIANDRNG_RNGFND_OFFSET    21
-
+// for fair scheduler
+#define TIME_SLOT_MAX               11
+#define FRSKY_SCHED_DEFAULT   2     // default to new scheduler
 
 
 class AP_Frsky_Telem {
@@ -201,6 +203,9 @@ private:
         uint32_t home_timer;
         uint32_t velandyaw_timer;
         uint32_t gps_latlng_timer;
+        uint16_t packet_period[TIME_SLOT_MAX];
+        uint32_t packet_timer[TIME_SLOT_MAX];  
+        uint8_t time_slot;     
     } _passthrough;
     
     struct
@@ -224,7 +229,14 @@ private:
         uint8_t repeats; // send each message "chunk" 3 times to make sure the entire messsage gets through without getting cut
         uint8_t char_index; // index of which character to get in the message
     } _msg_chunk;
-    
+
+    // settable parameters
+    AP_Int8 _scheduler_type;
+
+    void passthrough_def_scheduler(uint8_t prev_byte);
+    void passthrough_fair_scheduler(uint8_t prev_byte);
+    void passthrough_rr_scheduler(uint8_t prev_byte);
+
     // main transmission function when protocol is FrSky SPort Passthrough (OpenTX)
     void send_SPort_Passthrough(void);
     // main transmission function when protocol is FrSky SPort
