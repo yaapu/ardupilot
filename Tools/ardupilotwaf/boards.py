@@ -79,7 +79,6 @@ class Board:
             '-Wall',
             '-Wextra',
             '-Wformat',
-            '-Wshadow',
             '-Wpointer-arith',
             '-Wcast-align',
             '-Wundef',
@@ -88,6 +87,7 @@ class Board:
             '-Wno-redundant-decls',
             '-Wno-unknown-pragmas',
             '-Wno-trigraphs',
+            '-Werror=shadow',
             '-Werror=return-type',
             '-Werror=unused-result',
             '-Werror=narrowing',
@@ -149,7 +149,6 @@ class Board:
             '-Wall',
             '-Wextra',
             '-Wformat',
-            '-Wshadow',
             '-Wpointer-arith',
             '-Wcast-align',
             '-Wundef',
@@ -170,6 +169,7 @@ class Board:
             '-Werror=sign-compare',
             '-Werror=unused-result',
             '-Werror=return-type',
+            '-Werror=shadow',
             '-Wfatal-errors',
             '-Wno-trigraphs',
         ]
@@ -345,6 +345,11 @@ class sitl(Board):
             for f in os.listdir('libraries/AP_OSD/fonts'):
                 if fnmatch.fnmatch(f, "font*bin"):
                     env.ROMFS_FILES += [(f,'libraries/AP_OSD/fonts/'+f)]
+
+        if cfg.options.enable_sfml_audio:
+            if not cfg.check_SFML_Audio(env):
+                cfg.fatal("Failed to find SFML Audio libraries")
+            env.CXXFLAGS += ['-DWITH_SITL_TONEALARM']
 
         if cfg.options.sitl_flash_storage:
             env.CXXFLAGS += ['-DSTORAGE_USE_FLASH=1']
