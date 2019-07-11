@@ -67,18 +67,20 @@ void AP_Frsky_Telem::init(const AP_SerialManager &serial_manager,
         } else {
             _ap.valuep = ap_valuep;
         }
-        // initialize packet periods
-        _passthrough.packet_period[0] = 100;   // 10Hz 0x5000 status text
-        _passthrough.packet_period[1] = 100;   // 10Hz 0x5006 Attitude and range
-        _passthrough.packet_period[2] = 333;   // 3Hz 0x800 GPS lat
-        _passthrough.packet_period[3] = 333;   // 3Hz 0x800 GPS lon
-        _passthrough.packet_period[4] = 333;   // 3Hz 0x5005 Vel and Yaw
-        _passthrough.packet_period[5] = 500;   // 2Hz 0x5001 AP status
-        _passthrough.packet_period[6] = 500;   // 2Hz 0x5002 GPS Status
-        _passthrough.packet_period[7] = 500;   // 2Hz 0x5004 Home
-        _passthrough.packet_period[8] = 1000;  // 1Hz 0x5008 Battery 2 status
-        _passthrough.packet_period[9] = 1000;  // 1Hz 0x5003 Battery 1 status         
-        _passthrough.packet_period[10] = 2000; // 1/2Hz 0x5007 parameters
+        // initialize packet weights for the WFQ scheduler
+        // weight[i] = 1/_passthrough.packet_period[i]
+        // rate[i] = LinkRate * ( weight[i] / (sum(weight[1-n])) )
+        _passthrough.packet_period[0] = 40;   // 0x5000 status text, this weight is dynamic, when there are pending messages it changes to 50 to serve them fast
+        _passthrough.packet_period[1] = 80;   // 0x5006 Attitude and range
+        _passthrough.packet_period[2] = 500;   // 0x800 GPS lat
+        _passthrough.packet_period[3] = 500;   // 0x800 GPS lon
+        _passthrough.packet_period[4] = 500;   // 0x5005 Vel and Yaw
+        _passthrough.packet_period[5] = 600;   // 0x5001 AP status
+        _passthrough.packet_period[6] = 600;   // 0x5002 GPS Status
+        _passthrough.packet_period[7] = 600;   // 0x5004 Home
+        _passthrough.packet_period[8] = 1100;  // 0x5008 Battery 2 status
+        _passthrough.packet_period[9] = 1100;  // 0x5003 Battery 1 status
+        _passthrough.packet_period[10] = 1700; // 0x5007 parameters
         
         _passthrough.time_slot = 0;
         // fixed for now
@@ -92,155 +94,168 @@ void AP_Frsky_Telem::init(const AP_SerialManager &serial_manager,
     }
 }
 
+uint16_t AP_Frsky_Telem::calc_avg_polling_period(uint8_t polling_period)
+{
+    // initialize
+    if (_passthrough.avg_polling_period == 0) _passthrough.avg_polling_period = polling_period;
+    // moving average
+    _passthrough.avg_polling_period = (uint16_t)_passthrough.avg_polling_period * 0.9 + polling_period * 0.1;
+    return _passthrough.avg_polling_period;
+}
 
 void AP_Frsky_Telem::passthrough_def_scheduler(uint8_t prev_byte)
 {
-    if ((prev_byte == START_STOP_SPORT) && (_passthrough.new_byte == SENSOR_ID_28)) { // byte 0x7E is the header of each poll request
-        if (_passthrough.send_attiandrng) { // skip other data, send attitude (roll, pitch) and range only this iteration
-            _passthrough.send_attiandrng = false; // next iteration, check if we should send something other
-        } else { // send other sensor data if it's time for them, and reset the corresponding timer if sent
-            _passthrough.send_attiandrng = true; // next iteration, send attitude b/c it needs frequent updates to remain smooth
-            uint32_t now = AP_HAL::millis();
-            if ((now - _passthrough.params_timer) >= 1000) {
-                send_uint32(DIY_FIRST_ID+7, calc_param());
-                _passthrough.params_timer = AP_HAL::millis();
-                return;
+    if (_passthrough.send_attiandrng) { // skip other data, send attitude (roll, pitch) and range only this iteration
+        _passthrough.send_attiandrng = false; // next iteration, check if we should send something other
+    } else { // send other sensor data if it's time for them, and reset the corresponding timer if sent
+        _passthrough.send_attiandrng = true; // next iteration, send attitude b/c it needs frequent updates to remain smooth
+        uint32_t now = AP_HAL::millis();
+        if ((now - _passthrough.params_timer) >= 1000) {
+            send_uint32(DIY_FIRST_ID+7, calc_param());
+            _passthrough.params_timer = AP_HAL::millis();
+            return;
+        }
+        // build message queue for sensor_status_flags
+        check_sensor_status_flags();
+        // build message queue for ekf_status
+        check_ekf_status();
+        // if there's any message in the queue, start sending them chunk by chunk; three times each chunk
+        if (get_next_msg_chunk()) {
+            send_uint32(DIY_FIRST_ID, _msg_chunk.chunk);
+            return;
+        }
+        if ((now - _passthrough.ap_status_timer) >= 500) {
+            if (((*_ap.valuep) & AP_INITIALIZED_FLAG) > 0) {  // send ap status only once vehicle has been initialised
+                send_uint32(DIY_FIRST_ID+1, calc_ap_status());
+                _passthrough.ap_status_timer = AP_HAL::millis();
             }
-            // build message queue for sensor_status_flags
-            check_sensor_status_flags();
-            // build message queue for ekf_status
-            check_ekf_status();
-            // if there's any message in the queue, start sending them chunk by chunk; three times each chunk
-            if (get_next_msg_chunk()) {
-                send_uint32(DIY_FIRST_ID, _msg_chunk.chunk);
-                return;
-            }
-            if ((now - _passthrough.ap_status_timer) >= 500) {
-                if (((*_ap.valuep) & AP_INITIALIZED_FLAG) > 0) {  // send ap status only once vehicle has been initialised
-                    send_uint32(DIY_FIRST_ID+1, calc_ap_status());
-                    _passthrough.ap_status_timer = AP_HAL::millis();
-                }
-                return;
-            }
-            if ((now - _passthrough.batt_timer) >= 1000) {
-                send_uint32(DIY_FIRST_ID+3, calc_batt(0));
-                _passthrough.batt_timer = AP_HAL::millis();
-                return;
-            }
-            if (_battery.num_instances() > 1) {
-                if ((now - _passthrough.batt_timer2) >= 1000) {
-                    send_uint32(DIY_FIRST_ID+8, calc_batt(1));
-                    _passthrough.batt_timer2 = AP_HAL::millis();
-                    return;
-                }
-            }
-            if ((now - _passthrough.gps_status_timer) >= 1000) {
-                send_uint32(DIY_FIRST_ID+2, calc_gps_status());
-                _passthrough.gps_status_timer = AP_HAL::millis();
-                return;
-            }
-            if ((now - _passthrough.home_timer) >= 500) {
-                send_uint32(DIY_FIRST_ID+4, calc_home());
-                _passthrough.home_timer = AP_HAL::millis();
-                return;
-            }
-            if ((now - _passthrough.velandyaw_timer) >= 500) {
-                send_uint32(DIY_FIRST_ID+5, calc_velandyaw());
-                _passthrough.velandyaw_timer = AP_HAL::millis();
-                return;
-            }
-            if ((now - _passthrough.gps_latlng_timer) >= 1000) {
-                send_uint32(GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(&_passthrough.send_latitude)); // gps latitude or longitude
-                if (!_passthrough.send_latitude) { // we've cycled and sent one each of longitude then latitude, so reset the timer
-                    _passthrough.gps_latlng_timer = AP_HAL::millis();
-                }
+            return;
+        }
+        if ((now - _passthrough.batt_timer) >= 1000) {
+            send_uint32(DIY_FIRST_ID+3, calc_batt(0));
+            _passthrough.batt_timer = AP_HAL::millis();
+            return;
+        }
+        if (_battery.num_instances() > 1) {
+            if ((now - _passthrough.batt_timer2) >= 1000) {
+                send_uint32(DIY_FIRST_ID+8, calc_batt(1));
+                _passthrough.batt_timer2 = AP_HAL::millis();
                 return;
             }
         }
-        // if nothing else needed to be sent, send attitude (roll, pitch) and range data
-        send_uint32(DIY_FIRST_ID+6, calc_attiandrng());
+        if ((now - _passthrough.gps_status_timer) >= 1000) {
+            send_uint32(DIY_FIRST_ID+2, calc_gps_status());
+            _passthrough.gps_status_timer = AP_HAL::millis();
+            return;
+        }
+        if ((now - _passthrough.home_timer) >= 500) {
+            send_uint32(DIY_FIRST_ID+4, calc_home());
+            _passthrough.home_timer = AP_HAL::millis();
+            return;
+        }
+        if ((now - _passthrough.velandyaw_timer) >= 500) {
+            send_uint32(DIY_FIRST_ID+5, calc_velandyaw());
+            _passthrough.velandyaw_timer = AP_HAL::millis();
+            return;
+        }
+        if ((now - _passthrough.gps_latlng_timer) >= 1000) {
+            send_uint32(GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(&_passthrough.send_latitude)); // gps latitude or longitude
+            if (!_passthrough.send_latitude) { // we've cycled and sent one each of longitude then latitude, so reset the timer
+                _passthrough.gps_latlng_timer = AP_HAL::millis();
+            }
+            return;
+        }
     }
+    // if nothing else needed to be sent, send attitude (roll, pitch) and range data
+    send_uint32(DIY_FIRST_ID+6, calc_attiandrng());
 }
 
 /*
  * Alternative scheduler
  * for FrSky SPort Passthrough (OpenTX) protocol (X-receivers)
  */
-void AP_Frsky_Telem::passthrough_fair_scheduler(uint8_t prev_byte)
+void AP_Frsky_Telem::passthrough_wfq_adaptive_scheduler(uint8_t prev_byte)
 {
-    if ((prev_byte == START_STOP_SPORT) && (_passthrough.new_byte == SENSOR_ID_28)) { // byte 0x7E is the header of each poll request
-        uint32_t now = AP_HAL::millis();
-        // when there are no packets to be sent send messages as default 
-        // donate slot to attitude if message queue is empty
-        uint8_t max_delay_idx = 0;
-        int32_t delay = 0;
-        int32_t max_delay = 0;
-        // weight based on polling frequency, fixed for now
-        uint8_t mult = 1;
-        // search the packet with the longest delay after the scheduled time
-        for (int i=0;i<TIME_SLOT_MAX;i++) {
-            // delay is how long the packet has been waiting to be sent after the scheduled time
-            delay = (int32_t)(now - _passthrough.packet_timer[i] - _passthrough.packet_period[i]*mult); 
-            // use >= so with equal delays we choose the packet with lowest priority
-            // this is ensured by the packets being sorted by desc frequency 
-            if (delay >= max_delay) {
+    uint32_t now = AP_HAL::millis();
+    uint8_t max_delay_idx = 0;
+    float max_delay = 0;
+    float delay = 0;
+    bool packet_ready = false;
+
+    // build message queue for sensor_status_flags
+    check_sensor_status_flags();
+    // build message queue for ekf_status
+    check_ekf_status();
+
+    // search the packet with the longest normalized delay after the scheduled time
+    for (int i=0;i<TIME_SLOT_MAX;i++) {
+        //normalize packet delay relative to packet period
+        delay = (now - _passthrough.packet_timer[i])/static_cast<float>(_passthrough.packet_period[i]);
+        // use >= so with equal delays we choose the packet with lowest priority
+        // this is ensured by the packets being sorted by desc frequency 
+        if (delay >= max_delay) {
+            switch (i) {
+                case 0:
+                    packet_ready = !_statustext_queue.empty();
+                    break;
+                case 5:
+                    packet_ready = ((*_ap.valuep) & AP_INITIALIZED_FLAG) > 0;
+                    break;
+                case 8:
+                    packet_ready = AP::battery().num_instances() > 1;
+                    break;
+                default:
+                    packet_ready = true;
+                    break;
+            }
+
+            if (packet_ready) {
                 max_delay = delay;
                 max_delay_idx = i;
             }
         }
-        // build message queue for sensor_status_flags
-        check_sensor_status_flags();
-        // build message queue for ekf_status
-        check_ekf_status();
-  
-        // update packet timer
-        _passthrough.packet_timer[max_delay_idx] = AP_HAL::millis();
-        // send oldest packet
-        switch (max_delay_idx) {
-            case 0: // 0x5000 status text
-                if (get_next_msg_chunk()) {
-                    send_uint32(DIY_FIRST_ID, _msg_chunk.chunk);
-                    break;
-                }
-                // no messages pending, donate slot to attitude
-            case 1: // 0x5006 Attitude and range
-                send_uint32(DIY_FIRST_ID+6, calc_attiandrng());
-                break;
-            case 2: // 0x800 GPS lat
-                send_uint32(GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(&_passthrough.send_latitude)); // gps latitude or longitude
-                break;
-            case 3: // 0x800 GPS lon
-                send_uint32(GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(&_passthrough.send_latitude)); // gps latitude or longitude
-                break;
-            case 4: // 0x5005 Vel and Yaw
-                send_uint32(DIY_FIRST_ID+5, calc_velandyaw());
-                break;
-            case 5: // 0x5001 AP status
-                // send ap status only once vehicle has been initialised
-                if (((*_ap.valuep) & AP_INITIALIZED_FLAG) > 0) { // 2 Hz
-                    send_uint32(DIY_FIRST_ID+1, calc_ap_status());
-                    break;
-                }
-                // vehicle not initialized, donate slot to GPS status
-            case 6: // 0x5002 GPS Status
-                send_uint32(DIY_FIRST_ID+2, calc_gps_status());
-                break;
-            case 7: // 0x5004 Home
-                send_uint32(DIY_FIRST_ID+4, calc_home());
-                break;
-            case 8: // 0x5008 Battery 2 status
-                if (AP::battery().num_instances() > 1) { // 1 Hz
-                    send_uint32(DIY_FIRST_ID+8, calc_batt(1));
-                    break;
-                }
-                // no battery 2, donate slot to battery 1
-            case 9: // 0x5003 Battery 1 status
-                send_uint32(DIY_FIRST_ID+3, calc_batt(0));
-                break;
-            case 10: // 0x5007 parameters
-                send_uint32(DIY_FIRST_ID+7, calc_param());
-                break;
-        }
+    }
+    _passthrough.packet_timer[max_delay_idx] = AP_HAL::millis();
+    // send packet
+    switch (max_delay_idx) {
+        case 0: // 0x5000 status text
+            if (get_next_msg_chunk()) {
+                send_uint32(DIY_FIRST_ID, _msg_chunk.chunk);
+            }
+            break;
+        case 1: // 0x5006 Attitude and range
+            send_uint32(DIY_FIRST_ID+6, calc_attiandrng());
+            break;
+        case 2: // 0x800 GPS lat
+            send_uint32(GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(&_passthrough.send_latitude)); // gps latitude or longitude
+            // force the scheduler to select GPS lon as packet that's been waiting the most
+            // this guarantees that gps coords are sampled at max _passthrough.avg_polling_period time separation
+            _passthrough.packet_timer[3] = _passthrough.packet_timer[2] - 10000;
+            break;
+        case 3: // 0x800 GPS lon
+            send_uint32(GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(&_passthrough.send_latitude)); // gps latitude or longitude
+            break;
+        case 4: // 0x5005 Vel and Yaw
+            send_uint32(DIY_FIRST_ID+5, calc_velandyaw());
+            break;
+        case 5: // 0x5001 AP status
+            send_uint32(DIY_FIRST_ID+1, calc_ap_status());
+            break;
+        case 6: // 0x5002 GPS Status
+            send_uint32(DIY_FIRST_ID+2, calc_gps_status());
+            break;
+        case 7: // 0x5004 Home
+            send_uint32(DIY_FIRST_ID+4, calc_home());
+            break;
+        case 8: // 0x5008 Battery 2 status
+            send_uint32(DIY_FIRST_ID+8, calc_batt(1));
+            break;
+        case 9: // 0x5003 Battery 1 status
+            send_uint32(DIY_FIRST_ID+3, calc_batt(0));
+            break;
+        case 10: // 0x5007 parameters
+            send_uint32(DIY_FIRST_ID+7, calc_param());
+            break;
     }
 }
 
@@ -250,113 +265,110 @@ void AP_Frsky_Telem::passthrough_fair_scheduler(uint8_t prev_byte)
  */
 void AP_Frsky_Telem::passthrough_rr_scheduler(uint8_t prev_byte)
 {
-    if ((prev_byte == START_STOP_SPORT) && (_passthrough.new_byte == SENSOR_ID_28)) { // byte 0x7E is the header of each poll request
-        hal.console->printf("passthrough_fair_scheduler\n");    
-        uint32_t now = AP_HAL::millis();
-        // build message queue for sensor_status_flags
-        check_sensor_status_flags();
-        // build message queue for ekf_status
-        check_ekf_status();
-        switch (_passthrough.time_slot) //skip the slot of the last iteration
-        {
-            case 0: // 0x5000 status text
-                if (now - _passthrough.packet_timer[_passthrough.time_slot] > 10) {  // never give away your slot
-                    if (get_next_msg_chunk()) {
-                        send_uint32(DIY_FIRST_ID, _msg_chunk.chunk);
-                        _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
-                        break;
-                    }
-                    _passthrough.time_slot++; // donate slot
-                } else {
-                    _passthrough.time_slot++; // donate slot
-                }
-            case 1: // 0x5006 Attitude and range
-                if (now - _passthrough.packet_timer[_passthrough.time_slot] > 10) {   // never give away your slot
-                    send_uint32(DIY_FIRST_ID+6, calc_attiandrng());
+    uint32_t now = AP_HAL::millis();
+    // build message queue for sensor_status_flags
+    check_sensor_status_flags();
+    // build message queue for ekf_status
+    check_ekf_status();
+    switch (_passthrough.time_slot) //skip the slot of the last iteration
+    {
+        case 0: // 0x5000 status text
+            if (now - _passthrough.packet_timer[_passthrough.time_slot] > 10) {  // never give away your slot
+                if (get_next_msg_chunk()) {
+                    send_uint32(DIY_FIRST_ID, _msg_chunk.chunk);
                     _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
                     break;
                 }
-                else
-                {
-                    _passthrough.time_slot++; // donate slot
-                }
-            case 2: // 0x800 GPS 
-                if (now - _passthrough.packet_timer[_passthrough.time_slot] > 333) {  // 3 Hz
-                    send_uint32(GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(&_passthrough.send_latitude)); // gps latitude or longitude
-                   _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
-                    break;
-                } else {
-                    _passthrough.time_slot++; // donate slot
-                }
-            case 3: // 0x800 GPS
-                if (now - _passthrough.packet_timer[_passthrough.time_slot] > 333) {  // 3 Hz
-                    send_uint32(GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(&_passthrough.send_latitude)); // gps latitude or longitude
-                    _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
-                    break;
-                } else {
-                    _passthrough.time_slot++; // donate slot
-                }
-            case 4: // 0x5005 Vel and Yaw
-                if (now - _passthrough.packet_timer[_passthrough.time_slot] > 333) { // 3 Hz
-                    send_uint32(DIY_FIRST_ID+5, calc_velandyaw());
-                    _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
-                    break;
-                } else {
-                    _passthrough.time_slot++; // donate slot
-                }
-            case 5: // 0x5001 AP status
-                if (((*_ap.valuep) & AP_INITIALIZED_FLAG) > 0 && now - _passthrough.packet_timer[_passthrough.time_slot] > 500) { // 2 Hz
-                    // send ap status only once vehicle has been initialised
-                    send_uint32(DIY_FIRST_ID+1, calc_ap_status());
-                    _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
-                    break;
-                } else {
-                    _passthrough.time_slot++; // donate slot
-                }
-            case 6: // 0x5002 GPS Status
-                if ((now - _passthrough.packet_timer[_passthrough.time_slot]) > 500) { // 2 Hz
-                    send_uint32(DIY_FIRST_ID+2, calc_gps_status());
-                    _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
-                    break;
-                } else {
-                    _passthrough.time_slot++; // donate slot
-                }
-            case 7: // 0x5004 Home
-                if (now - _passthrough.packet_timer[_passthrough.time_slot] > 500) { // 2 Hz
-                    send_uint32(DIY_FIRST_ID+4, calc_home());
-                    _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
-                    break;
-                } else {
-                    _passthrough.time_slot++; // donate slot
-                }
-            case 8: // 0x5003 Battery 1 status
-                if (now - _passthrough.packet_timer[_passthrough.time_slot] > 1000) { // 1 Hz
-                    send_uint32(DIY_FIRST_ID+3, calc_batt(0));
-                    _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
-                    break;
-                } else {
-                    _passthrough.time_slot++; // donate slot
-                }
-            case 9: // 0x5008 Battery 2 status
-                if (AP::battery().num_instances() > 1 && now - _passthrough.packet_timer[_passthrough.time_slot] > 1000) { // 1 Hz
-                    send_uint32(DIY_FIRST_ID+8, calc_batt(1));
-                    _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
-                    break;
-                } else {
-                    _passthrough.time_slot++; // donate slot
-                }
-            case 10: // 0x5007 parameters
-                if ((now - _passthrough.packet_timer[_passthrough.time_slot]) > 2000) { // 0.5 Hz
-                    send_uint32(DIY_FIRST_ID+7, calc_param());
-                    _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
-                    break;
-                } else {
-                    _passthrough.time_slot++; // donate slot
-                }
-        }
-        _passthrough.time_slot++;
-        if ( _passthrough.time_slot > TIME_SLOT_MAX ) _passthrough.time_slot = 0;
+                _passthrough.time_slot++; // donate slot
+            } else {
+                _passthrough.time_slot++; // donate slot
+            }
+        case 1: // 0x5006 Attitude and range
+            if (now - _passthrough.packet_timer[_passthrough.time_slot] > 10) {   // never give away your slot
+                send_uint32(DIY_FIRST_ID+6, calc_attiandrng());
+                _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
+                break;
+            }
+            else
+            {
+                _passthrough.time_slot++; // donate slot
+            }
+        case 2: // 0x800 GPS 
+            if (now - _passthrough.packet_timer[_passthrough.time_slot] > 333) {  // 3 Hz
+                send_uint32(GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(&_passthrough.send_latitude)); // gps latitude or longitude
+                _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
+                break;
+            } else {
+                _passthrough.time_slot++; // donate slot
+            }
+        case 3: // 0x800 GPS
+            if (now - _passthrough.packet_timer[_passthrough.time_slot] > 333) {  // 3 Hz
+                send_uint32(GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(&_passthrough.send_latitude)); // gps latitude or longitude
+                _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
+                break;
+            } else {
+                _passthrough.time_slot++; // donate slot
+            }
+        case 4: // 0x5005 Vel and Yaw
+            if (now - _passthrough.packet_timer[_passthrough.time_slot] > 333) { // 3 Hz
+                send_uint32(DIY_FIRST_ID+5, calc_velandyaw());
+                _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
+                break;
+            } else {
+                _passthrough.time_slot++; // donate slot
+            }
+        case 5: // 0x5001 AP status
+            if (((*_ap.valuep) & AP_INITIALIZED_FLAG) > 0 && now - _passthrough.packet_timer[_passthrough.time_slot] > 500) { // 2 Hz
+                // send ap status only once vehicle has been initialised
+                send_uint32(DIY_FIRST_ID+1, calc_ap_status());
+                _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
+                break;
+            } else {
+                _passthrough.time_slot++; // donate slot
+            }
+        case 6: // 0x5002 GPS Status
+            if ((now - _passthrough.packet_timer[_passthrough.time_slot]) > 500) { // 2 Hz
+                send_uint32(DIY_FIRST_ID+2, calc_gps_status());
+                _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
+                break;
+            } else {
+                _passthrough.time_slot++; // donate slot
+            }
+        case 7: // 0x5004 Home
+            if (now - _passthrough.packet_timer[_passthrough.time_slot] > 500) { // 2 Hz
+                send_uint32(DIY_FIRST_ID+4, calc_home());
+                _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
+                break;
+            } else {
+                _passthrough.time_slot++; // donate slot
+            }
+        case 8: // 0x5003 Battery 1 status
+            if (now - _passthrough.packet_timer[_passthrough.time_slot] > 1000) { // 1 Hz
+                send_uint32(DIY_FIRST_ID+3, calc_batt(0));
+                _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
+                break;
+            } else {
+                _passthrough.time_slot++; // donate slot
+            }
+        case 9: // 0x5008 Battery 2 status
+            if (AP::battery().num_instances() > 1 && now - _passthrough.packet_timer[_passthrough.time_slot] > 1000) { // 1 Hz
+                send_uint32(DIY_FIRST_ID+8, calc_batt(1));
+                _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
+                break;
+            } else {
+                _passthrough.time_slot++; // donate slot
+            }
+        case 10: // 0x5007 parameters
+            if ((now - _passthrough.packet_timer[_passthrough.time_slot]) > 2000) { // 0.5 Hz
+                send_uint32(DIY_FIRST_ID+7, calc_param());
+                _passthrough.packet_timer[_passthrough.time_slot] = AP_HAL::millis();
+                break;
+            } else {
+                _passthrough.time_slot++; // donate slot
+            }
     }
+    _passthrough.time_slot++;
+    if ( _passthrough.time_slot > TIME_SLOT_MAX ) _passthrough.time_slot = 0;
 }
 
 /*
@@ -385,17 +397,27 @@ void AP_Frsky_Telem::send_SPort_Passthrough(void)
         _passthrough.new_byte = _port->read();
     }
 
-    switch(_scheduler_type) {
-        case 0:
-            passthrough_def_scheduler(prev_byte);
-            break;
-        case 1:
-            passthrough_rr_scheduler(prev_byte);
-            break;
-        case 2:
-            passthrough_fair_scheduler(prev_byte);
-            break;
+    if ((prev_byte == START_STOP_SPORT) && (_passthrough.new_byte == SENSOR_ID_28)) { // byte 0x7E is the header of each poll request
+        uint32_t poll_now = AP_HAL::millis();
+        // update average polling period
+        if (_passthrough.last_poll_timer > 0) {
+            calc_avg_polling_period(poll_now - _passthrough.last_poll_timer);
+        }
+        _passthrough.last_poll_timer = poll_now;
+
+        switch(_scheduler_type) {
+            case 2:
+                passthrough_wfq_adaptive_scheduler(prev_byte);
+                break;
+            case 1:
+                passthrough_rr_scheduler(prev_byte);
+                break;
+            case 0:
+                passthrough_def_scheduler(prev_byte);
+                break;
+        }
     }
+
 }
 
 /*
@@ -687,7 +709,21 @@ bool AP_Frsky_Telem::get_next_msg_chunk(void)
         }
     }
 
-    if (_msg_chunk.repeats++ > 1) { // repeat each message chunk 3 times to ensure transmission
+    // repeat each message chunk 3 times to ensure transmission
+    // on slow links reduce the number of duplicate chunks
+    uint8_t extra_chunks = 2;
+
+    if (_passthrough.avg_polling_period > 58) {
+        // with 3 or more extra frsky sensors on the bus
+        // send messages only once
+        extra_chunks = 0;
+    } else if (_passthrough.avg_polling_period > 32) {
+        // with 1 or 2 extra frsky sensors on the bus
+        // send messages twice
+        extra_chunks = 1;
+    }
+    
+    if (_msg_chunk.repeats++ > extra_chunks ) {
         _msg_chunk.repeats = 0;
         if (_msg_chunk.char_index == 0) { // if we're ready for the next message
             _statustext_queue.remove(0);

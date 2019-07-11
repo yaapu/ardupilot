@@ -203,8 +203,10 @@ private:
         uint32_t home_timer;
         uint32_t velandyaw_timer;
         uint32_t gps_latlng_timer;
+        uint32_t last_poll_timer;        
         uint16_t packet_period[TIME_SLOT_MAX];
-        uint32_t packet_timer[TIME_SLOT_MAX];  
+        uint32_t packet_timer[TIME_SLOT_MAX];
+        uint16_t avg_polling_period;        
         uint8_t time_slot;     
     } _passthrough;
     
@@ -234,8 +236,10 @@ private:
     AP_Int8 _scheduler_type;
 
     void passthrough_def_scheduler(uint8_t prev_byte);
-    void passthrough_fair_scheduler(uint8_t prev_byte);
+    void passthrough_wfq_adaptive_scheduler(uint8_t prev_byte);
     void passthrough_rr_scheduler(uint8_t prev_byte);
+    
+    uint16_t calc_avg_polling_period(uint8_t polling_period);
 
     // main transmission function when protocol is FrSky SPort Passthrough (OpenTX)
     void send_SPort_Passthrough(void);
