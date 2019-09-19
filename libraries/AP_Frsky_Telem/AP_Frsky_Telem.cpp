@@ -932,13 +932,18 @@ uint32_t AP_Frsky_Telem::calc_velandyaw(void)
 
     uint32_t velandyaw;
     Vector3f velNED {};
+    float vspd;
 
-    // if we can't get velocity then we use zero for vertical velocity
-    if (!_ahrs.get_velocity_NED(velNED)) {
-      velNED.zero();
+    WITH_SEMAPHORE(_ahrs.get_semaphore());
+    if (_ahrs.get_velocity_NED(velNED)) {
+        vspd = -velNED.z;
+    } else { // fall back to baro if needed
+        auto &_baro = AP::baro();
+        WITH_SEMAPHORE(_baro.get_semaphore());
+        vspd = _baro.get_climb_rate();
     }
     // vertical velocity in dm/s
-    velandyaw = prep_number(roundf(-velNED.z * 10), 2, 1);
+    velandyaw = prep_number(roundf(vspd * 10), 2, 1);
     // horizontal velocity in dm/s (use airspeed if available and enabled - even if not used - otherwise use groundspeed)
     const AP_Airspeed *aspeed = _ahrs.get_airspeed();
     if (aspeed && aspeed->enabled()) {        
