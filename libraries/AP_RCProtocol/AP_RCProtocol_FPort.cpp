@@ -124,8 +124,8 @@ void AP_RCProtocol_FPort::decode_control(const FPort_Frame &frame)
 
     bool failsafe = ((frame.control.flags & (1 << FLAGS_FAILSAFE_BIT)) != 0);
 
-    // we scale rssi by 2x to make it match the value displayed in OpenTX
-    const uint8_t scaled_rssi = MIN(frame.control.rssi*2, 255);
+    // fport rssi 0-50, ardupilot rssi 0-255, scale factor 255/50=5.1
+    const uint8_t scaled_rssi = MIN(frame.control.rssi * 5.1f, 255);
 
     add_input(MAX_CHANNELS, values, failsafe, scaled_rssi);
 }
@@ -156,6 +156,7 @@ void AP_RCProtocol_FPort::decode_downlink(const FPort_Frame &frame)
             break;
         case FPORT_PRIM_READ:
         case FPORT_PRIM_WRITE:
+            AP_Frsky_Telem::set_telem_data(frame.downlink.prim, frame.downlink.appid, *(uint32_t*)frame.downlink.data);
             // do not respond to 0x30 and 0x31
             return;
     }

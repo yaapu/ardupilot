@@ -40,6 +40,7 @@
 #include <AP_ESC_Telem/AP_ESC_Telem.h>
 #include <AP_GyroFFT/AP_GyroFFT.h>
 #include <AP_VisualOdom/AP_VisualOdom.h>
+#include <AP_Frsky_Telem/AP_Frsky_Parameters.h>
 
 class AP_Vehicle : public AP_HAL::HAL::Callbacks {
 
@@ -174,6 +175,8 @@ public:
     // get target location (for use by scripting)
     virtual bool get_target_location(Location& target_loc) { return false; }
     
+    AP_Frsky_Parameters frsky_parameters;
+
 protected:
 
     virtual void init_ardupilot() = 0;
