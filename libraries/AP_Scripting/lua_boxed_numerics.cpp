@@ -19,7 +19,9 @@ uint32_t coerce_to_uint32_t(lua_State *L, int arg) {
 
         int success;
         const lua_Integer v = lua_tointegerx(L, arg, &success);
-        if (success && v >= 0) {
+        // after a successfull cast to a signed lua integer
+        // ignore sign to account for the MSB
+        if (success) {
             return static_cast<uint32_t>(v);
         }
     }
