@@ -86,12 +86,10 @@ struct PACKED FPort_Frame {
     };
 };
 
-struct {
-    bool available = false;
-    uint32_t data;
-    uint16_t appid;
-    uint8_t frame;
-} telem_data;
+bool telem_available = false;
+uint32_t telem_data;
+uint16_t telem_appid;
+uint8_t telem_frame;
 
 // receiver sends 0x10 when ready to receive telemetry frames (R-XSR)
 bool rx_driven_frame_rate = false;
@@ -190,14 +188,14 @@ void AP_RCProtocol_FPort::decode_downlink(const FPort_Frame &frame)
       send it in the next call, this prevents corruption of
       status text messages
      */
-    if (!telem_data.available) {
-        if (!AP_Frsky_Telem::get_telem_data(telem_data.frame, telem_data.appid, telem_data.data)) {
+    if (!telem_available) {
+        if (!AP_Frsky_Telem::get_telem_data(telem_frame, telem_appid, telem_data)) {
             // nothing to send, send a null frame
-            telem_data.frame = 0x00; 
-            telem_data.appid = 0x00; 
-            telem_data.data = 0x00;
+            telem_frame = 0x00; 
+            telem_appid = 0x00; 
+            telem_data = 0x00;
         }
-        telem_data.available = true;
+        telem_available = true;
     }
     /*
       check that we haven't been too slow in responding to the new
@@ -215,10 +213,10 @@ void AP_RCProtocol_FPort::decode_downlink(const FPort_Frame &frame)
 
     buf[0] = 0x08;
     buf[1] = 0x81;
-    buf[2] = telem_data.frame;
-    buf[3] = telem_data.appid & 0xFF;
-    buf[4] = telem_data.appid >> 8;
-    memcpy(&buf[5], &telem_data.data, 4);
+    buf[2] = telem_frame;
+    buf[3] = telem_appid & 0xFF;
+    buf[4] = telem_appid >> 8;
+    memcpy(&buf[5], &telem_data, 4);
 
     uint16_t sum = 0;
     for (uint8_t i=0; i<sizeof(buf)-1; i++) {
@@ -249,7 +247,7 @@ void AP_RCProtocol_FPort::decode_downlink(const FPort_Frame &frame)
     }
     uart->write(buf2, len);
     // get fresh telem_data in the next call
-    telem_data.available = false;
+    telem_available = false;
 #endif
 }
 
