@@ -483,7 +483,7 @@ class FRSkySPort(FRSky):
         self.SENSOR_ID_FAS               = 0x22 # Sensor ID  2
         self.SENSOR_ID_GPS               = 0x83 # Sensor ID  3
         self.SENSOR_ID_SP2UR             = 0xC6 # Sensor ID  6
-        self.SENSOR_ID_28                = 0x1B # Sensor ID 28
+        self.SENSOR_ID_27                = 0x1B # Sensor ID 27
 
         self.state = self.state_WANT_FRAME_TYPE
 
@@ -505,13 +505,19 @@ class FRSkySPort(FRSky):
             0x5007: "parameters",
 
             # SPort non-passthrough:
+            0x01: "GPS_ALT_BP",
             0x02: "Temp1",
             0x04: "Fuel",
             0x05: "Temp2",
-            0x10: "Baro Alt BP",
+            0x09: "GPS_ALT_AP",
+            0x10: "BARO_ALT_BP",
+            0x11: "GPS_ALT_AP",
+            0x14: "HDG",
+            0x19: "GPS_SPEED_AP",
             0x21: "BARO_ALT_AP",
+            0x28: "CURR",
             0x30: "VARIO",
-            0x39: "VFAS",
+            0x39: "VFAS"
             # 0x800: "GPS", ## comments as duplicated dictrionary key
         }
 
@@ -664,7 +670,7 @@ class FRSkyPassThrough(FRSkySPort):
     def __init__(self, destination_address):
         super(FRSkyPassThrough, self).__init__(destination_address)
 
-        self.sensors_to_poll = [self.SENSOR_ID_28]
+        self.sensors_to_poll = [self.SENSOR_ID_27]
 
     def progress(self, message):
         print("FRSkyPassthrough: %s" % message)
@@ -4746,6 +4752,60 @@ switch value'''
         if m3.state != 0:
             raise NotAchievedException("Didn't get expected mask back in message (mask=0 state=%u" % (m3.state))
 
+    def compare_number_percent(self, num1, num2, percent):
+        if abs(num1-num2)/max(abs(num1),abs(num2)) <= percent*0.01:
+            return True
+        return False
+
+    def tfp_prep_number(self,number,digits,power):
+        res = 0
+        abs_number = abs(number)
+        if digits == 2 and power == 1: # number encoded on 8 bits: 7 bits for digits + 1 for 10^power
+            if abs_number < 100:
+                res = abs_number<<1
+            elif abs_number < 1270:
+                res = (round(abs_number * 0.1)<<1)|0x1
+            else: # transmit max possible value (0x7F x 10^1 = 1270)
+                res = 0xFF
+            if number < 0:  # if number is negative, add sign bit in front
+                res |= 0x1<<8
+        elif digits == 2 and power == 2: # number encoded on 9 bits: 7 bits for digits + 2 for 10^power
+            if abs_number < 100:
+                res = abs_number<<2
+            elif abs_number < 1000:
+                res = (round(abs_number * 0.1)<<2)|0x1
+            elif abs_number < 10000:
+                res = (round(abs_number * 0.01)<<2)|0x2
+            elif abs_number < 127000:
+                res = (round(abs_number * 0.001)<<2)|0x3
+            else: # transmit max possible value (0x7F x 10^3 = 127000)
+                res = 0x1FF
+            if number < 0: # if number is negative, add sign bit in front
+                res |= 0x1<<9
+        elif digits == 3 and power == 1: # number encoded on 11 bits: 10 bits for digits + 1 for 10^power
+            if abs_number < 1000:
+                res = abs_number<<1
+            elif abs_number < 10240:
+                res = (round(abs_number * 0.1)<<1)|0x1
+            else: # transmit max possible value (0x3FF x 10^1 = 10240)
+                res = 0x7FF
+            if number < 0: # if number is negative, add sign bit in front
+                res |= 0x1<<11
+        elif digits == 3 and power == 2: # number encoded on 12 bits: 10 bits for digits + 2 for 10^power
+            if abs_number < 1000:
+                res = abs_number<<2
+            elif abs_number < 10000:
+                res = (round(abs_number * 0.1)<<2)|0x1
+            elif abs_number < 100000:
+                res = (round(abs_number * 0.01)<<2)|0x2
+            elif abs_number < 1024000:
+                res = (round(abs_number * 0.001)<<2)|0x3
+            else: # transmit max possible value (0x3FF x 10^3 = 127000)
+                res = 0xFFF
+            if number < 0: # if number is negative, add sign bit in front
+                res |= 0x1<<12
+        return res
+
     def tfp_validate_vel_and_yaw(self, value):
         self.progress("validating vel_and_yaw(0x%02x)" % value)
         VELANDYAW_XYVEL_OFFSET = 9
@@ -4787,7 +4847,6 @@ switch value'''
         if abs(battery_status_value - voltage) > 0.1:
             return False
         return True
-
     def test_frsky_passthrough(self):
         self.set_parameter("SERIAL5_PROTOCOL", 10) # serial5 is FRSky passthrough
         self.customise_SITL_commandline([
@@ -4874,6 +4933,21 @@ switch value'''
                     self.progress("  Fulfilled")
                     del wants[want]
 
+    def tfs_validate_baro_alt(self, value):
+        self.progress("validating baro altitude integer part (0x%02x)" % value)
+        alt = value
+        vfr_hud = self.mav.recv_match(
+            type='VFR_HUD',
+            blocking=True,
+            timeout=1
+        )
+        if vfr_hud is None:
+            raise NotAchievedException("Did not get VFR_HUD message")
+        vfr_hud_alt = round(vfr_hud.alt)
+        self.progress("VFR_HUD==%f frsky==%f" % (vfr_hud_alt, alt))
+        if self.compare_number_percent(vfr_hud_alt,alt,10):
+            return True
+        return False
     def test_frsky_sport(self):
         self.set_parameter("SERIAL5_PROTOCOL", 4) # serial5 is FRSky sport
         self.customise_SITL_commandline([
@@ -4886,14 +4960,20 @@ switch value'''
         # This, at least makes sure we're getting some of each
         # message.
         wants = {
-            0x02:  lambda x : True,
-            0x04:  lambda x : True,
-            0x05:  lambda x : True,
-            0x10:  lambda x : True,
-            0x21:  lambda x : True,
-            0x30:  lambda x : True,
-            0x39:  lambda x : True,
-            0x800: lambda x : True,
+            0x01:  lambda x : True, # gps altitude integer m
+            0x02:  lambda x : True, # Tmp1
+            0x04:  lambda x : True, # fuel
+            0x05:  lambda x : True, # Tmp2
+            0x09:  lambda x : True, # gps altitude decimal cm
+            0x10:  self.tfs_validate_baro_alt, # baro alt integer m
+            0x11:  lambda x : True, # gps speed integer m/s
+            0x14:  lambda x : True, # yaw in degrees
+            0x19:  lambda x : True, # gps speed decimal cm/s
+            0x21:  lambda x : True, # altitude decimal m
+            0x28:  lambda x : True, # current A
+            0x30:  lambda x : True, # vertical speed m/s
+            0x39:  lambda x : True, # battery 1 voltage
+            0x800: lambda x : True, # gps lat/lon
         }
         tstart = self.get_sim_time_cached()
         last_wanting_print = 0
@@ -4903,7 +4983,7 @@ switch value'''
                 self.progress("Still wanting (%s)" % ",".join([ ("0x%02x" % x) for x in wants.keys()]))
                 last_wanting_print = now
             wants_copy = copy.copy(wants)
-            if now - tstart > 10:
+            if now - tstart > 30:
                 raise AutoTestTimeoutException("Failed to get frsky data")
             frsky.update()
             for want in wants_copy:

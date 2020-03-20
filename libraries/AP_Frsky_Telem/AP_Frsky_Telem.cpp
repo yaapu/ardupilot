@@ -530,6 +530,7 @@ void AP_Frsky_Telem::send_byte(uint8_t byte)
  */
 void  AP_Frsky_Telem::send_uint32(uint8_t frame, uint16_t id, uint32_t data)
 {
+    hal.console->printf("send_uint32(%04X,%08X)\n",id,data);
     if (use_external_data) {
         external_data.frame = frame;
         external_data.appid = id;
