@@ -4757,6 +4757,12 @@ switch value'''
             return True
         return False
 
+    def bit_extract(self,number,offset,length):
+        mask = 0
+        for i in range(offset,offset+length):
+            mask |= 1 << i
+        return (number & mask) >> offset
+
     def tfp_prep_number(self,number,digits,power):
         res = 0
         abs_number = abs(number)
@@ -4808,20 +4814,16 @@ switch value'''
 
     def tfp_validate_vel_and_yaw(self, value):
         self.progress("validating vel_and_yaw(0x%02x)" % value)
-        VELANDYAW_XYVEL_OFFSET = 9
-        VELANDYAW_YAW_LIMIT = 0x7FF
-        VELANDYAW_YAW_OFFSET = 16
-        yaw = value >> VELANDYAW_YAW_OFFSET
-        xy_vel = value >> VELANDYAW_XYVEL_OFFSET & 0xFF
-        z_vel_dm_per_second = value & 0xFFFF
-
+        z_vel_dm_per_second = self.bit_extract(value,1,7) * (10^self.bit_extract(value,0,1)) * (self.bit_extract(value,8,1) == 1 and -1 or 1)
+        xy_vel = self.bit_extract(value,10,7) * (10^self.bit_extract(value,9,1))
+        yaw = self.bit_extract(value,17,11) * 0.2
         gpi = self.mav.recv_match(type='GLOBAL_POSITION_INT', blocking=True, timeout=1)
         if gpi is None:
             return
-        self.progress(" yaw=%u gpi=%u" % (yaw, gpi.hdg))
+        self.progress(" yaw=%u gpi=%u" % (yaw, gpi.hdg*0.01))
         self.progress(" xy_vel=%u" % xy_vel)
         self.progress(" z_vel_dm_per_second=%u" % z_vel_dm_per_second)
-        if int(round(yaw/10.0)) == int(round(gpi.hdg/100.0)):
+        if self.compare_number_percent(gpi.hdg*0.01,yaw,10): 
             self.progress("Yaw match")
             return True
               # FIXME: need to be under way to check the velocities, really....
