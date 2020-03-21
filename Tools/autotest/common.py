@@ -1072,6 +1072,15 @@ class AutoTest(ABC):
                                        (length, min_length))
         self.progress("xml file length is %u" % length)
 
+        from lxml import objectify
+        xml = open(xml_filepath,'rb').read()
+        objectify.enable_recursive_str()
+        tree = objectify.fromstring(xml)
+        for thing in tree.logformat:
+            print("Got (%s)" % str(thing.get("name")))
+#        for entry in tree.children:
+#            print("Got entry (%s)" % str(entry))
+
     def initialise_after_reboot_sitl(self):
 
         # after reboot stream-rates may be zero.  Prompt MAVProxy to
@@ -4753,6 +4762,8 @@ switch value'''
             raise NotAchievedException("Didn't get expected mask back in message (mask=0 state=%u" % (m3.state))
 
     def compare_number_percent(self, num1, num2, percent):
+        if num1 == 0 and num2 == 0:
+            return True
         if abs(num1-num2)/max(abs(num1),abs(num2)) <= percent*0.01:
             return True
         return False
@@ -4763,6 +4774,13 @@ switch value'''
             mask |= 1 << i
         return (number & mask) >> offset
 
+    def tfp_encode_gps_latitude(self,lat):
+        value = 0
+        if lat < 0:
+            value = ((abs(lat)/100)*6) | 0x40000000
+        else:
+            value = ((abs(lat)/100)*6)
+        return value
     def tfp_prep_number(self,number,digits,power):
         res = 0
         abs_number = abs(number)
@@ -4935,9 +4953,39 @@ switch value'''
                     self.progress("  Fulfilled")
                     del wants[want]
 
+    def tfs_validate_gps_alt(self, value):
+        self.progress("validating gps altitude integer part (0x%02x)" % value)
+        alt = value
+        gpi = self.mav.recv_match(
+            type='GLOBAL_POSITION_INT',
+            blocking=True,
+            timeout=1
+        )
+        if gpi is None:
+            raise NotAchievedException("Did not get GLOBAL_POSITION_INT message")
+        gpi_alt = round(gpi.alt*0.001)
+        self.progress("GLOBAL_POSITION_INT alt==%f frsky==%f" % (gpi_alt, alt))
+        if self.compare_number_percent(gpi_alt,alt,10):
+            return True
+        return False
     def tfs_validate_baro_alt(self, value):
         self.progress("validating baro altitude integer part (0x%02x)" % value)
         alt = value
+        gpi = self.mav.recv_match(
+            type='GLOBAL_POSITION_INT',
+            blocking=True,
+            timeout=1
+        )
+        if gpi is None:
+            raise NotAchievedException("Did not get GLOBAL_POSITION_INT message")
+        gpi_alt = round(gpi.relative_alt)
+        self.progress("GLOBAL_POSITION_INT relative_alt==%f frsky==%f" % (gpi_alt, alt))
+        if abs(gpi_alt -alt) < 10:
+            return True
+        return False
+    def tfs_validate_gps_speed(self, value):
+        self.progress("validating gps speed integer part (0x%02x)" % value)
+        speed = value
         vfr_hud = self.mav.recv_match(
             type='VFR_HUD',
             blocking=True,
@@ -4945,9 +4993,133 @@ switch value'''
         )
         if vfr_hud is None:
             raise NotAchievedException("Did not get VFR_HUD message")
-        vfr_hud_alt = round(vfr_hud.alt)
-        self.progress("VFR_HUD==%f frsky==%f" % (vfr_hud_alt, alt))
-        if self.compare_number_percent(vfr_hud_alt,alt,10):
+        vfr_hud_speed = round(vfr_hud.groundspeed)
+        self.progress("VFR_HUD groundspeed==%f frsky==%f" % (vfr_hud_speed, speed))
+        if self.compare_number_percent(vfr_hud_speed,speed,10):
+            return True
+        return False
+    def tfs_validate_yaw(self, value):
+        self.progress("validating yaw (0x%02x)" % value)
+        yaw = value
+        vfr_hud = self.mav.recv_match(
+            type='VFR_HUD',
+            blocking=True,
+            timeout=1
+        )
+        if vfr_hud is None:
+            raise NotAchievedException("Did not get VFR_HUD message")
+        vfr_hud_yaw = round(vfr_hud.heading)
+        self.progress("VFR_HUD heading==%f frsky==%f" % (vfr_hud_yaw, yaw))
+        if self.compare_number_percent(vfr_hud_yaw,yaw,10):
+            return True
+        return False
+    def tfs_validate_vspeed(self, value):
+        self.progress("validating vspeed (0x%02x)" % value)
+        vspeed = value
+        vfr_hud = self.mav.recv_match(
+            type='VFR_HUD',
+            blocking=True,
+            timeout=1
+        )
+        if vfr_hud is None:
+            raise NotAchievedException("Did not get VFR_HUD message")
+        vfr_hud_vspeed = round(vfr_hud.climb)
+        self.progress("VFR_HUD climb==%f frsky==%f" % (vfr_hud_vspeed, vspeed))
+        if self.compare_number_percent(vfr_hud_vspeed,vspeed,10):
+            return True
+        return False
+    def tfs_validate_battery1(self, value):
+        self.progress("validating battery1 (0x%02x)" % value)
+        voltage = value/10.0
+        batt = self.mav.recv_match(
+            type='BATTERY_STATUS',
+            blocking=True,
+            timeout=5,
+            condition="BATTERY_STATUS.id==0"
+        )
+        if batt is None:
+            raise NotAchievedException("Did not get BATTERY_STATUS message")
+        battery_status_value = batt.voltages[0]/1000.0
+        self.progress("BATTERY_STATUS volatge==%f frsky==%f" % (battery_status_value, voltage))
+        if self.compare_number_percent(battery_status_value,voltage,10):
+            return True
+        return False  
+    def tfs_validate_current1(self, value):
+        self.progress("validating battery1 (0x%02x)" % value)
+        current = value
+        batt = self.mav.recv_match(
+            type='BATTERY_STATUS',
+            blocking=True,
+            timeout=5,
+            condition="BATTERY_STATUS.id==0"
+        )
+        if batt is None:
+            raise NotAchievedException("Did not get BATTERY_STATUS message")
+        battery_status_current = batt.current_battery/100.0
+        self.progress("BATTERY_STATUS current==%f frsky==%f" % (battery_status_current, current))
+        if self.compare_number_percent(battery_status_current,current,10):
+            return True
+        return False 
+    def tfs_validate_fuel(self, value):
+        self.progress("validating fuel (0x%02x)" % value)
+        fuel = value
+        batt = self.mav.recv_match(
+            type='BATTERY_STATUS',
+            blocking=True,
+            timeout=5,
+            condition="BATTERY_STATUS.id==0"
+        )
+        if batt is None:
+            raise NotAchievedException("Did not get BATTERY_STATUS message")
+        battery_status_fuel = batt.battery_remaining
+        self.progress("BATTERY_STATUS fuel==%f frsky==%f" % (battery_status_fuel, fuel))
+        if self.compare_number_percent(battery_status_fuel,fuel,10):
+            return True
+        return False 
+    def tfs_validate_gps(self, value):
+        self.progress("validating gps (0x%02x)" % value)
+        lat = value
+        gpi = self.mav.recv_match(
+            type='GLOBAL_POSITION_INT',
+            blocking=True,
+            timeout=1
+        )
+        if gpi is None:
+            raise NotAchievedException("Did not get GLOBAL_POSITION_INT message")
+        gpi_lat = self.tfp_encode_gps_latitude(gpi.lat)
+        self.progress("GLOBAL_POSITION_INT lat==%f frsky==%f" % (gpi_lat, lat))
+        if gpi_lat == lat:
+            return True
+        return False
+
+    def tfs_validate_tmp1(self, value):
+        self.progress("validating tmp1 (0x%02x)" % value)
+        tmp1 = value
+        heartbeat = self.mav.recv_match(
+            type='HEARTBEAT',
+            blocking=True,
+            timeout=1
+        )
+        if heartbeat is None:
+            raise NotAchievedException("Did not get HEARTBEAT message")
+        heartbeat_tmp1 = heartbeat.custom_mode
+        self.progress("GLOBAL_POSITION_INT custom_mode==%f frsky==%f" % (heartbeat_tmp1, heartbeat_tmp1))
+        if heartbeat_tmp1 == heartbeat_tmp1:
+            return True
+        return False
+    def tfs_validate_tmp2(self, value):
+        self.progress("validating tmp2 (0x%02x)" % value)
+        tmp2 = value
+        gps_raw = self.mav.recv_match(
+            type='GPS_RAW_INT',
+            blocking=True,
+            timeout=1
+        )
+        if gps_raw is None:
+            raise NotAchievedException("Did not get GPS_RAW_INT message")
+        gps_raw_tmp2 = gps_raw.satellites_visible*10 + gps_raw.fix_type
+        self.progress("GPS_RAW_INT tmp2==%f frsky==%f" % (gps_raw_tmp2, tmp2))
+        if gps_raw_tmp2 == tmp2:
             return True
         return False
     def test_frsky_sport(self):
@@ -4962,20 +5134,20 @@ switch value'''
         # This, at least makes sure we're getting some of each
         # message.
         wants = {
-            0x01:  lambda x : True, # gps altitude integer m
-            0x02:  lambda x : True, # Tmp1
-            0x04:  lambda x : True, # fuel
-            0x05:  lambda x : True, # Tmp2
+            0x01:  self.tfs_validate_gps_alt, # gps altitude integer m
+            0x02:  self.tfs_validate_tmp1, # Tmp1
+            0x04:  self.tfs_validate_fuel, # fuel
+            0x05:  self.tfs_validate_tmp2, # Tmp2
             0x09:  lambda x : True, # gps altitude decimal cm
             0x10:  self.tfs_validate_baro_alt, # baro alt integer m
-            0x11:  lambda x : True, # gps speed integer m/s
-            0x14:  lambda x : True, # yaw in degrees
+            0x11:  self.tfs_validate_gps_speed, # gps speed integer m/s
+            0x14:  self.tfs_validate_yaw, # yaw in degrees
             0x19:  lambda x : True, # gps speed decimal cm/s
             0x21:  lambda x : True, # altitude decimal m
-            0x28:  lambda x : True, # current A
-            0x30:  lambda x : True, # vertical speed m/s
-            0x39:  lambda x : True, # battery 1 voltage
-            0x800: lambda x : True, # gps lat/lon
+            0x28:  self.tfs_validate_current1, # current A
+            0x30:  self.tfs_validate_vspeed, # vertical speed m/s
+            0x39:  self.tfs_validate_battery1, # battery 1 voltage
+            0x800: self.tfs_validate_gps, # gps lat/lon
         }
         tstart = self.get_sim_time_cached()
         last_wanting_print = 0
@@ -4985,7 +5157,7 @@ switch value'''
                 self.progress("Still wanting (%s)" % ",".join([ ("0x%02x" % x) for x in wants.keys()]))
                 last_wanting_print = now
             wants_copy = copy.copy(wants)
-            if now - tstart > 30:
+            if now - tstart > 60:
                 raise AutoTestTimeoutException("Failed to get frsky data")
             frsky.update()
             for want in wants_copy:
