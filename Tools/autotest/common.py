@@ -4830,7 +4830,28 @@ switch value'''
                 res |= 0x1<<12
         return res
 
-    def tfp_validate_vel_and_yaw(self, value):
+    def tfp_validate_ap_status(self, value): # 0x5001
+        self.progress("validating ap_status(0x%02x)" % value)
+        flight_mode = self.bit_extract(value,0,5) - 1 # first mode is 1 not 0 :-)
+        simple_mode = self.bit_extract(value,5,2)
+        land_complete = self.bit_extract(value,7,1)
+        status_armed = self.bit_extract(value,8,1)
+        batt_failsafe = self.bit_extract(value,9,1)
+        ekf_failsafe = self.bit_extract(value,10,2)
+        # IMU temperature: 0 means temp =< 19, 63 means temp => 82
+        imu_temp = self.bit_extract(value,26,6) + 19
+        heartbeat = self.mav.recv_match(type='HEARTBEAT',blocking=True,timeout=1)
+        if heartbeat is None:
+            raise NotAchievedException("Did not get HEARTBEAT message")
+        mav_flight_mode = heartbeat.custom_mode
+        self.progress(" mode=%u heartbeat=%u" % (flight_mode, mav_flight_mode))
+        if mav_flight_mode == flight_mode: 
+            self.progress("flight mode match")
+            return True
+              # FIXME: need to be under way to check the velocities, really....
+        return False
+
+    def tfp_validate_vel_and_yaw(self, value): # 0x5005
         self.progress("validating vel_and_yaw(0x%02x)" % value)
         z_vel_dm_per_second = self.bit_extract(value,1,7) * (10^self.bit_extract(value,0,1)) * (self.bit_extract(value,8,1) == 1 and -1 or 1)
         xy_vel = self.bit_extract(value,10,7) * (10^self.bit_extract(value,9,1))
@@ -4929,7 +4950,7 @@ switch value'''
             0x5006: lambda xx : True,
             0x800: lambda xx : True,
             0x5005: self.tfp_validate_vel_and_yaw,
-            0x5001: lambda xx : True,
+            0x5001: self.tfp_validate_ap_status,
             0x5002: lambda xx : True,
             0x5004: lambda xx : True,
             #            0x5008: lambda x : True, # no second battery, so this doesn't arrive
