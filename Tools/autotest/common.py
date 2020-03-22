@@ -4834,7 +4834,7 @@ switch value'''
         self.progress("validating ap_status(0x%02x)" % value)
         flight_mode = self.bit_extract(value,0,5) - 1 # first mode is 1 not 0 :-)
         simple_mode = self.bit_extract(value,5,2)
-        land_complete = self.bit_extract(value,7,1)
+        is_flying = not self.bit_extract(value,7,1)
         status_armed = self.bit_extract(value,8,1)
         batt_failsafe = self.bit_extract(value,9,1)
         ekf_failsafe = self.bit_extract(value,10,2)
@@ -5124,8 +5124,8 @@ switch value'''
         if heartbeat is None:
             raise NotAchievedException("Did not get HEARTBEAT message")
         heartbeat_tmp1 = heartbeat.custom_mode
-        self.progress("GLOBAL_POSITION_INT custom_mode==%f frsky==%f" % (heartbeat_tmp1, heartbeat_tmp1))
-        if heartbeat_tmp1 == heartbeat_tmp1:
+        self.progress("GLOBAL_POSITION_INT custom_mode==%f frsky==%f" % (heartbeat_tmp1, tmp1))
+        if heartbeat_tmp1 == tmp1:
             return True
         return False
     def tfs_validate_tmp2(self, value):
