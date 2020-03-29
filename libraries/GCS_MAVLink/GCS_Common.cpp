@@ -1877,7 +1877,12 @@ void GCS::send_textv(MAV_SEVERITY severity, const char *fmt, va_list arg_list, u
     if (frsky != nullptr) {
         frsky->queue_message(severity, first_piece_of_text);
     }
-
+#if HAL_SPEKTRUM_TELEM_ENABLED
+    spektrum = AP::spektrum_telem();
+    if (spektrum != nullptr) {
+        spektrum->queue_message(severity, first_piece_of_text);
+    }
+#endif
     AP_Notify *notify = AP_Notify::get_singleton();
     if (notify) {
         notify->send_text(first_piece_of_text);
@@ -2061,7 +2066,15 @@ void GCS::setup_uarts()
             frsky = nullptr;
         }
     }
-
+#if HAL_SPEKTRUM_TELEM_ENABLED
+    if (spektrum == nullptr) {
+        spektrum = new AP_Spektrum_Telem();
+        if (spektrum == nullptr || !spektrum->init()) {
+            delete spektrum;
+            spektrum = nullptr;
+        }
+    }
+#endif
 #if !HAL_MINIMIZE_FEATURES
     ltm_telemetry.init();
     devo_telemetry.init();

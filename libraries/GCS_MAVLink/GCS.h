@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include "MAVLink_routing.h"
 #include <AP_Frsky_Telem/AP_Frsky_Telem.h>
+#include <AP_RCTelemetry/AP_Spektrum_Telem.h>
 #include <AP_AdvancedFailsafe/AP_AdvancedFailsafe.h>
 #include <AP_RTC/JitterCorrection.h>
 #include <AP_Common/Bitmask.h>
@@ -880,6 +881,10 @@ public:
     // frsky backend
     AP_Frsky_Telem *frsky;
 
+#if HAL_SPEKTRUM_TELEM_ENABLED
+    // spektrum backend
+    AP_Spektrum_Telem *spektrum;
+#endif
 #if !HAL_MINIMIZE_FEATURES
     // LTM backend
     AP_LTM_Telem ltm_telemetry;
