@@ -53,7 +53,6 @@ private:
 
     uint8_t _buffer[SRXL2_FRAMELEN_MAX];       /* buffer for raw srxl frame data in correct order --> buffer[0]=byte0  buffer[1]=byte1  */
     uint8_t _buflen;                          /* length in number of bytes of received srxl dataframe in buffer  */
-    uint32_t _last_data_us;                   /* timespan since last received data in us   */
     uint32_t _last_run_ms;                    // last time the state machine was run
     uint16_t _channels[SRXL2_MAX_CHANNELS] = {0};    /* buffer for extracted RC channel data as pulsewidth in microseconds */
 
