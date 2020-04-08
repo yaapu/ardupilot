@@ -43,6 +43,15 @@ public:
 
 protected:
     void run_wfq_scheduler();
+    // set an entry in the scheduler table
+    void set_scheduler_entry(uint8_t slot, uint32_t weight, uint32_t min_period_ms) {
+        _scheduler.packet_weight[slot] = weight;
+        _scheduler.packet_min_period[slot] = min_period_ms;
+    }
+    // add an entry to the scheduler table
+    void add_scheduler_entry(uint32_t weight, uint32_t min_period_ms) {
+        set_scheduler_entry(_time_slots++, weight, min_period_ms);
+    }
     // setup ready for passthrough operation
     virtual bool init(void);
 

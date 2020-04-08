@@ -55,7 +55,7 @@ extern const AP_HAL::HAL& hal;
 
 AP_Spektrum_Telem *AP_Spektrum_Telem::singleton;
 
-AP_Spektrum_Telem::AP_Spektrum_Telem() : AP_RCTelemetry(NUM_SENSORS)
+AP_Spektrum_Telem::AP_Spektrum_Telem() : AP_RCTelemetry(0)
 {
     singleton = this;
 }
@@ -78,33 +78,21 @@ void AP_Spektrum_Telem::setup_wfq_scheduler(void)
     // initialize packet weights for the WFQ scheduler
     // priority[i] = 1/_scheduler.packet_weight[i]
     // rate[i] = LinkRate * ( priority[i] / (sum(priority[1-n])) )
-    _scheduler.packet_weight[QOS] =           50;     // QOS
-    _scheduler.packet_weight[RPM] =           50;     // RPM
-    _scheduler.packet_weight[TEXT] =          50;     // status text (dynamic)
-    _scheduler.packet_weight[ATTITUDE] =      50;     // Attitude and compass
-    _scheduler.packet_weight[GPS_LOC] =      550;     // GPS lat and long
-    _scheduler.packet_weight[ESC] =          550;     // ESC
-    _scheduler.packet_weight[ALTITUDE] =     400;     // Altitude
-    _scheduler.packet_weight[AIRSPEED] =     400;     // Airspeed
-    _scheduler.packet_weight[GPS_STATUS] =   700;     // GPS Status
-    _scheduler.packet_weight[VOLTAGE] =     1300;     // Battery 1 voltage
-    _scheduler.packet_weight[AMPS] =        1300;     // Battery 1 current
-    _scheduler.packet_weight[MAH] =         1300;     // Battery 1 & 2 current & mah
-    _scheduler.packet_weight[TEMP] =        1300;     // Temperature
+
     // Spektrum telemetry rate is 46Hz, so these rates must fit
-    _scheduler.packet_min_period[QOS] =      100;     // qos        10Hz
-    _scheduler.packet_min_period[RPM] =      100;     // rpm        10Hz
-    _scheduler.packet_min_period[TEXT] =     100;     // text,      10Hz
-    _scheduler.packet_min_period[ATTITUDE] = 120;     // Attitude and compass 8Hz
-    _scheduler.packet_min_period[GPS_LOC] =  280;     // GPS        3Hz
-    _scheduler.packet_min_period[ESC] =      280;     // ESC        3Hz
-    _scheduler.packet_min_period[ALTITUDE] = 250;     // altitude   4Hz
-    _scheduler.packet_min_period[AIRSPEED] = 250;     // airspeed   4Hz
-    _scheduler.packet_min_period[GPS_STATUS] = 500;   // GPS status 2Hz
-    _scheduler.packet_min_period[VOLTAGE] =  500;     // batt volt  2Hz
-    _scheduler.packet_min_period[AMPS] =     500;     // batt curr  2Hz
-    _scheduler.packet_min_period[MAH] =      500;     // batt mah   2Hz
-    _scheduler.packet_min_period[TEMP] =     500;     // temp       2Hz
+    add_scheduler_entry(50, 100);   // qos        10Hz
+    add_scheduler_entry(50, 100);   // rpm        10Hz
+    add_scheduler_entry(50, 100);   // text,      10Hz
+    add_scheduler_entry(50, 120);   // Attitude and compass 8Hz
+    add_scheduler_entry(550, 280);  // GPS        3Hz
+    add_scheduler_entry(550, 280);  // ESC        3Hz
+    add_scheduler_entry(400, 250);  // altitude   4Hz
+    add_scheduler_entry(400, 250);  // airspeed   4Hz
+    add_scheduler_entry(700, 500);  // GPS status 2Hz
+    add_scheduler_entry(1300, 500); // batt volt  2Hz
+    add_scheduler_entry(1300, 500); // batt curr  2Hz
+    add_scheduler_entry(1300, 500); // batt mah   2Hz
+    add_scheduler_entry(1300, 500); // temp       2Hz
 }
 
 void AP_Spektrum_Telem::adjust_packet_weight(bool queue_empty)
