@@ -57,29 +57,17 @@ void AP_Frsky_Telem::setup_wfq_scheduler(void)
     // initialize packet weights for the WFQ scheduler
     // priority[i] = 1/_scheduler.packet_weight[i]
     // rate[i] = LinkRate * ( priority[i] / (sum(priority[1-n])) )
-    _scheduler.packet_weight[0] = 35;    // 0x5000 status text (dynamic)
-    _scheduler.packet_weight[1] = 50;    // 0x5006 Attitude and range (dynamic)
-    _scheduler.packet_weight[2] = 550;   // 0x800 GPS lat (600 with 1 sensor)
-    _scheduler.packet_weight[3] = 550;   // 0x800 GPS lon (600 with 1 sensor)
-    _scheduler.packet_weight[4] = 400;   // 0x5005 Vel and Yaw
-    _scheduler.packet_weight[5] = 700;   // 0x5001 AP status
-    _scheduler.packet_weight[6] = 700;   // 0x5002 GPS Status
-    _scheduler.packet_weight[7] = 400;   // 0x5004 Home
-    _scheduler.packet_weight[8] = 1300;  // 0x5008 Battery 2 status
-    _scheduler.packet_weight[9] = 1300;  // 0x5003 Battery 1 status
-    _scheduler.packet_weight[10] = 1700; // 0x5007 parameters
-
-    _scheduler.packet_min_period[0] =   28;     //0x5000 text,      25Hz
-    _scheduler.packet_min_period[1] =   38;     //0x5006 attitude   20Hz
-    _scheduler.packet_min_period[2] =   280;    //0x800  GPS        3Hz
-    _scheduler.packet_min_period[3] =   280;    //0x800  GPS        3Hz
-    _scheduler.packet_min_period[4] =   250;    //0x5005 vel&yaw    4Hz
-    _scheduler.packet_min_period[5] =   500;    //0x5001 AP status  2Hz
-    _scheduler.packet_min_period[6] =   500;    //0x5002 GPS status 2Hz
-    _scheduler.packet_min_period[7] =   500;    //0x5004 home       2Hz
-    _scheduler.packet_min_period[8] =   500;    //0x5008 batt 2     2Hz
-    _scheduler.packet_min_period[9] =   500;    //0x5003 batt 1     2Hz
-    _scheduler.packet_min_period[10] =  1000;   //0x5007 parameters 1Hz
+    set_scheduler_entry(TEXT, 35, 28);          // 0x5000 status text (dynamic)
+    set_scheduler_entry(ATTITUDE, 50, 38);      // 0x5006 Attitude and range (dynamic)
+    set_scheduler_entry(GPS_LAT, 550, 280);     // 0x800 GPS lat
+    set_scheduler_entry(GPS_LON, 550, 280);     // 0x800 GPS lon
+    set_scheduler_entry(VEL_YAW, 400, 250);     // 0x5005 Vel and Yaw
+    set_scheduler_entry(AP_STATUS, 700, 500);   // 0x5001 AP status
+    set_scheduler_entry(GPS_STATUS, 700, 500);  // 0x5002 GPS status
+    set_scheduler_entry(HOME, 400, 500);        // 0x5004 Home
+    set_scheduler_entry(BATT_2, 1300, 500);     // 0x5008 Battery 2 status
+    set_scheduler_entry(BATT_1, 1300, 500);     // 0x5008 Battery 1 status
+    set_scheduler_entry(PARAM, 1700, 1000);     // 0x5007 parameters
 }
 
 /*
@@ -87,6 +75,10 @@ void AP_Frsky_Telem::setup_wfq_scheduler(void)
  */
 bool AP_Frsky_Telem::init()
 {
+    if (use_external_data) {
+        return AP_RCTelemetry::init();
+    }
+
     const AP_SerialManager &serial_manager = AP::serialmanager();
 
     // check for protocol configured for a serial port - only the first serial port with one of these protocols will then run (cannot have FrSky on multiple serial ports)
@@ -116,11 +108,11 @@ bool AP_Frsky_Telem::init()
 void AP_Frsky_Telem::adjust_packet_weight(bool queue_empty)
 {
     if (!queue_empty) {
-        _scheduler.packet_weight[0] = 45;     // messages
-        _scheduler.packet_weight[1] = 80;     // attitude
+        _scheduler.packet_weight[TEXT] = 45;     // messages
+        _scheduler.packet_weight[ATTITUDE] = 80;     // attitude
     } else {
-        _scheduler.packet_weight[0] = 5000;   // messages
-        _scheduler.packet_weight[1] = 45;     // attitude
+        _scheduler.packet_weight[TEXT] = 5000;   // messages
+        _scheduler.packet_weight[ATTITUDE] = 45;     // attitude
     }
 }
 
@@ -129,13 +121,13 @@ bool AP_Frsky_Telem::is_packet_ready(uint8_t idx, bool queue_empty)
 {
     bool packet_ready = false;
     switch (idx) {
-        case 0:
+        case TEXT:
             packet_ready = !queue_empty;
             break;
-        case 5:
+        case AP_STATUS:
             packet_ready = gcs().vehicle_initialised();
             break;
-        case 8:
+        case BATT_2:
             packet_ready = AP::battery().num_instances() > 1;
             break;
         default:
@@ -154,45 +146,45 @@ void AP_Frsky_Telem::process_packet(uint8_t idx)
 {
     // send packet
     switch (idx) {
-        case 0: // 0x5000 status text
+        case TEXT: // 0x5000 status text
             if (get_next_msg_chunk()) {
                 send_uint32(SPORT_DATA_FRAME, DIY_FIRST_ID, _msg_chunk.chunk);
             }
             break;
-        case 1: // 0x5006 Attitude and range
+        case ATTITUDE: // 0x5006 Attitude and range
             send_uint32(SPORT_DATA_FRAME, DIY_FIRST_ID+6, calc_attiandrng());
             break;
-        case 2: // 0x800 GPS lat
+        case GPS_LAT: // 0x800 GPS lat
             // sample both lat and lon at the same time
             send_uint32(SPORT_DATA_FRAME, GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(&_passthrough.send_latitude)); // gps latitude or longitude
             _passthrough.gps_lng_sample = calc_gps_latlng(&_passthrough.send_latitude);
             // force the scheduler to select GPS lon as packet that's been waiting the most
             // this guarantees that gps coords are sent at max 
             // _scheduler.avg_polling_period*number_of_downlink_sensors time separation
-            _scheduler.packet_timer[3] = _scheduler.packet_timer[2] - 10000;
+            _scheduler.packet_timer[GPS_LON] = _scheduler.packet_timer[GPS_LAT] - 10000;
             break;
-        case 3: // 0x800 GPS lon
+        case GPS_LON: // 0x800 GPS lon
             send_uint32(SPORT_DATA_FRAME, GPS_LONG_LATI_FIRST_ID, _passthrough.gps_lng_sample); // gps longitude
             break;
-        case 4: // 0x5005 Vel and Yaw
+        case VEL_YAW: // 0x5005 Vel and Yaw
             send_uint32(SPORT_DATA_FRAME, DIY_FIRST_ID+5, calc_velandyaw());
             break;
-        case 5: // 0x5001 AP status
+        case AP_STATUS: // 0x5001 AP status
             send_uint32(SPORT_DATA_FRAME, DIY_FIRST_ID+1, calc_ap_status());
             break;
-        case 6: // 0x5002 GPS Status
+        case GPS_STATUS: // 0x5002 GPS Status
             send_uint32(SPORT_DATA_FRAME, DIY_FIRST_ID+2, calc_gps_status());
             break;
-        case 7: // 0x5004 Home
+        case HOME: // 0x5004 Home
             send_uint32(SPORT_DATA_FRAME, DIY_FIRST_ID+4, calc_home());
             break;
-        case 8: // 0x5008 Battery 2 status
+        case BATT_2: // 0x5008 Battery 2 status
             send_uint32(SPORT_DATA_FRAME, DIY_FIRST_ID+8, calc_batt(1));
             break;
-        case 9: // 0x5003 Battery 1 status
+        case BATT_1: // 0x5003 Battery 1 status
             send_uint32(SPORT_DATA_FRAME, DIY_FIRST_ID+3, calc_batt(0));
             break;
-        case 10: // 0x5007 parameters
+        case PARAM: // 0x5007 parameters
             send_uint32(SPORT_DATA_FRAME, DIY_FIRST_ID+7, calc_param());
             break;
     }

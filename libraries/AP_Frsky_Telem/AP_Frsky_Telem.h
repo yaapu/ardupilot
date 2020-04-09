@@ -139,6 +139,20 @@ private:
 
     uint8_t _paramID;
     
+    enum PassthroughPacketType : uint8_t {
+        TEXT =          0,  // 0x5000 status text (dynamic)
+        ATTITUDE =      1,  // 0x5006 Attitude and range (dynamic)
+        GPS_LAT =       2,  // 0x800 GPS lat
+        GPS_LON =       3,  // 0x800 GPS lon
+        VEL_YAW =       4,  // 0x5005 Vel and Yaw
+        AP_STATUS =     5,  // 0x5001 AP status
+        GPS_STATUS =    6,  // 0x5002 GPS status
+        HOME =          7,  // 0x5004 Home
+        BATT_2 =        8,  // 0x5008 Battery 2 status
+        BATT_1 =        9,  // 0x5008 Battery 1 status
+        PARAM =         10  // 0x5007 parameters
+    };
+
     struct
     {
         int32_t vario_vspd;
