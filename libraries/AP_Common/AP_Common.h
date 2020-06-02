@@ -77,6 +77,9 @@
   bool. Bitnumber starts at 0 for the first bit
  */
 #define BIT_IS_SET(value, bitnumber) (((value) & (1U<<(bitnumber))) != 0)
+#define SET_BIT(value, bitnumber) ((value) |= (1U << (bitnumber)))
+#define CLEAR_BIT(value, bitnumber) ((value) &= ~(1U << (bitnumber)))
+#define TOGGLE_BIT(value, bitnumber) ((value) ^= (1U << (bitnumber)))
 
 // get high or low bytes from 2 byte integer
 #define LOWBYTE(i) ((uint8_t)(i))

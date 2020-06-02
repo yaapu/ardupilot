@@ -40,6 +40,7 @@
 #include <AP_ESC_Telem/AP_ESC_Telem.h>
 #include <AP_GyroFFT/AP_GyroFFT.h>
 #include <AP_VisualOdom/AP_VisualOdom.h>
+#include <AP_MSP/AP_MSP.h>
 
 class AP_Vehicle : public AP_HAL::HAL::Callbacks {
 
@@ -237,6 +238,10 @@ protected:
 #endif
 
     AP_ESC_Telem esc_telem;
+
+#if HAL_MSP_ENABLED
+    AP_MSP msp;
+#endif
 
     static const struct AP_Param::GroupInfo var_info[];
     static const struct AP_Scheduler::Task scheduler_tasks[];
