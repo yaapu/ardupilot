@@ -7,4 +7,5 @@ min-conditional-indent=0
 suffix=none
 lineend=linux
 pad-header
+indent-switches
 

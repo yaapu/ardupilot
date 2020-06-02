@@ -448,8 +448,8 @@ void AP_BLHeli::msp_process_command(void)
         break;
     }
 
-    case MSP_SET_4WAY_IF: {
-        debug("MSP_SET_4WAY_IF");
+    case MSP_SET_PASSTHROUGH: {
+        debug("MSP_SET_PASSTHROUGH");
         if (msp.dataSize == 0) {
             msp.escMode = PROTOCOL_4WAY;
         } else if (msp.dataSize == 2) {
@@ -1314,6 +1314,11 @@ void AP_BLHeli::update(void)
         }
     }
 
+}
+
+uint8_t AP_BLHeli::get_num_motors(void) 
+{
+    return num_motors;
 }
 
 // get the most recent telemetry data packet for a motor

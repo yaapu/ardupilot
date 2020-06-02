@@ -18,7 +18,9 @@
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Param/AP_Param.h>
 #include <GCS_MAVLink/GCS.h>
+#include <AP_MSP/msp.h>
 #include "AP_RangeFinder_Params.h"
+
 
 // Maximum number of range finder instances available on this platform
 #ifndef RANGEFINDER_MAX_INSTANCES
@@ -32,6 +34,10 @@
 #else
 #define RANGEFINDER_PREARM_REQUIRED_CHANGE_CM   50
 #endif
+
+#if HAL_MSP_ENABLED
+using namespace MSP;
+#endif //HAL_MSP_ENABLED
 
 class AP_RangeFinder_Backend;
 
@@ -80,6 +86,7 @@ public:
         VL53L1X_Short = 28,
         LeddarVu8_Serial = 29,
         HC_SR04 = 30,
+        MSP = 31,
     };
 
     enum class Function {
@@ -132,6 +139,10 @@ public:
     // Handle an incoming DISTANCE_SENSOR message (from a MAVLink enabled range finder)
     void handle_msg(const mavlink_message_t &msg);
 
+#if HAL_MSP_ENABLED
+    // Handle an incoming DISTANCE_SENSOR message (from a MSP enabled range finder)
+    void handle_msp(const msp_rangefinder_sensor_t &pkt);
+#endif //HAL_MSP_ENABLED
     // return true if we have a range finder with the specified orientation
     bool has_orientation(enum Rotation orientation) const;
 

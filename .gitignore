@@ -126,3 +126,6 @@ segv_*out
 /ArduSub/scripts/
 persistent.dat
 dumpstack_*out
+nbproject/
+libraries/AP_Scripting/generator/gen-bindings
+
