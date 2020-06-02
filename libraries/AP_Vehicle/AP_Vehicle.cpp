@@ -27,6 +27,11 @@ const AP_Param::GroupInfo AP_Vehicle::var_info[] = {
     AP_SUBGROUPINFO(visual_odom, "VISO",  3, AP_Vehicle, AP_VisualOdom),
 #endif
 
+#if HAL_MSP_ENABLED
+    // @Group: MSP
+    // @Path: ../AP_MSP/AP_MSP.cpp
+    AP_SUBGROUPINFO(msp, "MSP",  4, AP_Vehicle, AP_MSP),
+#endif
     AP_GROUPEND
 };
 
@@ -102,7 +107,9 @@ void AP_Vehicle::setup()
     // init library used for visual position estimation
     visual_odom.init();
 #endif
-
+#if HAL_MSP_ENABLED
+    msp.init();
+#endif
 #if AP_PARAM_KEY_DUMP
     AP_Param::show_all(hal.console, true);
 #endif
