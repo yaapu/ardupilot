@@ -49,6 +49,10 @@ extern const AP_HAL::HAL& hal;
 
 #define MAX_FPORT_CONSECUTIVE_FRAMES 2
 
+#ifndef HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
+#define HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL 1
+#endif
+
 struct PACKED FPort_Frame {
     uint8_t header; // 0x7E
     uint8_t len;    // 0x19 for control, 0x08 for downlink
@@ -124,8 +128,8 @@ void AP_RCProtocol_FPort::decode_control(const FPort_Frame &frame)
 
     bool failsafe = ((frame.control.flags & (1 << FLAGS_FAILSAFE_BIT)) != 0);
 
-    // we scale rssi by 2x to make it match the value displayed in OpenTX
-    const uint8_t scaled_rssi = MIN(frame.control.rssi*2, 255);
+    // fport rssi 0-50, ardupilot rssi 0-255, scale factor 255/50=5.1
+    const uint8_t scaled_rssi = MIN(frame.control.rssi * 5.1f, 255);
 
     add_input(MAX_CHANNELS, values, failsafe, scaled_rssi);
 }
@@ -156,6 +160,9 @@ void AP_RCProtocol_FPort::decode_downlink(const FPort_Frame &frame)
             break;
         case FPORT_PRIM_READ:
         case FPORT_PRIM_WRITE:
+#if HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL        
+            AP_Frsky_Telem::set_telem_data(frame.downlink.prim, frame.downlink.appid, le32toh_ptr(frame.downlink.data));
+#endif //HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL            
             // do not respond to 0x30 and 0x31
             return;
     }
@@ -171,7 +178,6 @@ void AP_RCProtocol_FPort::decode_downlink(const FPort_Frame &frame)
     if (!uart) {
         return;
     }
-
     /*
       get SPort data from FRSky_Telem or send a null frame.
       We save the data to a variable so in case we're late we'll
