@@ -51,20 +51,14 @@ using namespace MAVLITE;
 
 AP_Frsky_Telem *AP_Frsky_Telem::singleton;
 
+AP_Frsky_Telem::AP_Frsky_Telem(bool _external_data) : AP_RCTelemetry(TIME_SLOT_MAX)
+    ,use_external_data(_external_data)
+{
+    singleton = this;
 #if HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
-AP_Frsky_Telem::AP_Frsky_Telem(bool _external_data) : AP_RCTelemetry(TIME_SLOT_MAX)
-    ,use_external_data(_external_data)
-    ,_frsky_parameters(&AP::vehicle()->frsky_parameters)
-{
-    singleton = this;
-}
-#else
-AP_Frsky_Telem::AP_Frsky_Telem(bool _external_data) : AP_RCTelemetry(TIME_SLOT_MAX)
-    ,use_external_data(_external_data)
-{
-    singleton = this;
-}
+    _frsky_parameters = &AP::vehicle()->frsky_parameters;
 #endif //HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
+}
 
 
 AP_Frsky_Telem::~AP_Frsky_Telem(void)
