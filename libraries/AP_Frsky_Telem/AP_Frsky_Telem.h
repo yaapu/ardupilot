@@ -14,14 +14,13 @@
 */
 #pragma once
 
-#include "AP_Frsky_Parameters.h"
-#include "frsky.h"
-
 #include <AP_HAL/AP_HAL.h>
 #include <AP_HAL/utility/RingBuffer.h>
 #include <AP_Notify/AP_Notify.h>
 #include <AP_RCTelemetry/AP_RCTelemetry.h>
 #include <AP_SerialManager/AP_SerialManager.h>
+#include "AP_Frsky_Parameters.h"
+#include "frsky.h"
 
 #ifndef HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
 #define HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL 1

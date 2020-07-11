@@ -22,8 +22,6 @@
    FRSKY Telemetry library
 */
 
-#include "AP_Frsky_Telem.h"
-
 #include <AP_AHRS/AP_AHRS.h>
 #include <AP_Baro/AP_Baro.h>
 #include <AP_BattMonitor/AP_BattMonitor.h>
@@ -36,7 +34,7 @@
 #include <AP_Param/AP_Param.h>
 #include <AP_RangeFinder/AP_RangeFinder.h>
 #include <AP_Vehicle/AP_Vehicle.h>
-
+#include "AP_Frsky_Telem.h"
 #include <stdio.h>
 #include <math.h>
 

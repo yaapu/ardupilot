@@ -12,9 +12,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-#include "mavlite.h"
-
 #include <AP_Math/AP_Math.h>
+#include "mavlite.h"
 #include <stdint.h>
 
 #if HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
