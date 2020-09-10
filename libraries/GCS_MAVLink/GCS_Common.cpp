@@ -2615,9 +2615,7 @@ void GCS_MAVLINK::zero_rc_outputs()
     // Send an invalid signal to the motors to prevent spinning due to neutral (1500) pwm pulse being cut short
     // For that matter, send an invalid signal to all channels to prevent undesired/unexpected behavior
     SRV_Channels::cork();
-    for (int i=0; i<NUM_RC_CHANNELS; i++) {
-        hal.rcout->write(i, 0);
-    }
+    SRV_Channels::zero_rc_outputs();
     SRV_Channels::push();
 }
 
