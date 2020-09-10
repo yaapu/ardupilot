@@ -20,6 +20,15 @@
 #include <AP_HAL/utility/RingBuffer.h>
 #include <AP_RCTelemetry/AP_RCTelemetry.h>
 
+#include "AP_Frsky_SPort.h"
+
+#if HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
+#include "AP_Frsky_MAVlite.h"
+#define FRSKY_WFQ_TIME_SLOT_MAX     12U
+#else
+#define FRSKY_WFQ_TIME_SLOT_MAX     11U
+#endif //HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
+
 #define FRSKY_TELEM_PAYLOAD_STATUS_CAPACITY          5 // size of the message buffer queue (max number of messages waiting to be sent)
 
 /* 
@@ -111,10 +120,11 @@ for FrSky SPort Passthrough
 #define ATTIANDRNG_PITCH_LIMIT      0x3FF
 #define ATTIANDRNG_PITCH_OFFSET     11
 #define ATTIANDRNG_RNGFND_OFFSET    21
-// for fair scheduler
-#define TIME_SLOT_MAX               11
 
-class AP_Frsky_Telem : public AP_RCTelemetry {
+class AP_Frsky_Parameters;
+
+class AP_Frsky_Telem : public AP_RCTelemetry
+{
 public:
     AP_Frsky_Telem(bool external_data=false);
 
@@ -133,14 +143,14 @@ public:
 
     // get next telemetry data for external consumers of SPort data
     static bool get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data);
-
+#if HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
+    // set telemetry data from external producer of SPort data
+    static bool set_telem_data(const uint8_t frame,const uint16_t appid, const uint32_t data);
+#endif //HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
 private:
     AP_HAL::UARTDriver *_port;                  // UART used to send data to FrSky receiver
     AP_SerialManager::SerialProtocol _protocol; // protocol used - detected using SerialManager's SERIAL#_PROTOCOL parameter
-    uint16_t _crc;
 
-    uint8_t _paramID;
-    
     enum PassthroughPacketType : uint8_t {
         TEXT =          0,  // 0x5000 status text (dynamic)
         ATTITUDE =      1,  // 0x5006 Attitude and range (dynamic)
@@ -152,7 +162,10 @@ private:
         HOME =          7,  // 0x5004 Home
         BATT_2 =        8,  // 0x5008 Battery 2 status
         BATT_1 =        9,  // 0x5008 Battery 1 status
-        PARAM =         10  // 0x5007 parameters
+        PARAM =         10, // 0x5007 parameters
+#if HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
+        MAV =           11,  // mavlite
+#endif //HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
     };
 
     enum PassthroughParam : uint8_t {
@@ -185,6 +198,7 @@ private:
         bool send_latitude; // sizeof(bool) = 4 ?
         uint32_t gps_lng_sample;
         uint8_t new_byte;
+        uint8_t paramID;
     } _passthrough;
 
     struct
@@ -211,6 +225,23 @@ private:
         uint8_t char_index; // index of which character to get in the message
     } _msg_chunk;
     
+#if HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
+    AP_Frsky_Parameters* _frsky_parameters;
+
+    // bidirectional sport telemetry
+    struct {
+        uint8_t uplink_sensor_id = 0x0D;
+        uint8_t downlink1_sensor_id = 0x34;
+        uint8_t downlink2_sensor_id = 0x67;
+        uint8_t tx_packet_duplicates;
+        ObjectBuffer_TS<AP_Frsky_SPort::sport_packet_t> rx_packet_queue{SPORT_PACKET_QUEUE_LENGTH};
+        ObjectBuffer_TS<AP_Frsky_SPort::sport_packet_t> tx_packet_queue{SPORT_PACKET_QUEUE_LENGTH};
+    } _SPort_bidir;
+
+    AP_Frsky_SPort _sport_handler;
+    AP_Frsky_MAVlite _mavlite_handler;
+#endif //HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
+
     float get_vspeed_ms(void);
     // passthrough WFQ scheduler
     bool is_packet_ready(uint8_t idx, bool queue_empty) override;
@@ -219,23 +250,26 @@ private:
     // setup ready for passthrough operation
     void setup_wfq_scheduler(void) override;
 
+
     // main transmission function when protocol is FrSky SPort Passthrough (OpenTX)
     void send_SPort_Passthrough(void);
     // main transmission function when protocol is FrSky SPort
     void send_SPort(void);
     // main transmission function when protocol is FrSky D
     void send_D(void);
-    // tick - main call to send updates to transmitter (called by scheduler at 1kHz)
+    // main call to send updates to transmitter (used as a thread "main")
     void loop(void);
     // methods related to the nuts-and-bolts of sending data
     void send_byte(uint8_t value);
     void send_uint16(uint16_t id, uint16_t data);
     void send_sport_frame(uint8_t frame, uint16_t appid, uint32_t data);
+    // true if we need to respond to the last polling byte
+    bool is_passthrough_byte(const uint8_t byte);
 
     // methods to convert flight controller data to FrSky SPort Passthrough (OpenTX) format
     bool get_next_msg_chunk(void) override;
     uint32_t calc_param(void);
-    uint32_t calc_gps_latlng(bool *send_latitude);
+    uint32_t calc_gps_latlng(bool &send_latitude);
     uint32_t calc_gps_status(void);
     uint32_t calc_batt(uint8_t instance);
     uint32_t calc_ap_status(void);
@@ -249,9 +283,37 @@ private:
     float format_gps(float dec);
     void calc_gps_position(void);
 
+#if HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
+    bool set_sport_sensor_id(AP_Int8 idx, uint8_t &sensor);
+    // tx/rx sport packet processing
+    bool parse_sport_rx_data(void);
+    void queue_sport_rx_packet(const AP_Frsky_SPort::sport_packet_t sp);
+    void process_sport_rx_queue(void);
+    void process_sport_tx_queue(void);
+    // sensor id helper
+    uint8_t get_sport_sensor_id(uint8_t physical_id);
+
+    // mavlite messages tx/rx methods
+    bool mavlite_send_message(AP_Frsky_MAVlite::mavlite_message_t &txmsg);
+    void mavlite_process_message(const AP_Frsky_MAVlite::mavlite_message_t &rxmsg);
+
+    // gcs mavlite methods
+    void mavlite_handle_param_request_read(const AP_Frsky_MAVlite::mavlite_message_t &rxmsg);
+    void mavlite_handle_param_set(const AP_Frsky_MAVlite::mavlite_message_t &rxmsg);
+    void mavlite_handle_command_long(const AP_Frsky_MAVlite::mavlite_message_t &rxmsg);
+    void mavlite_send_command_ack(const MAV_RESULT mav_result, const uint16_t cmdid);
+    MAV_RESULT mavlite_handle_command_preflight_calibration_baro();
+    MAV_RESULT mavlite_handle_command_do_fence_enable(uint16_t param1);
+    MAV_RESULT mavlite_handle_command_preflight_reboot(void);
+#endif //HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
+
     // get next telemetry data for external consumers of SPort data (internal function)
     bool _get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data);
-    
+#if HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
+    // set telemetry data from external producer of SPort data (internal function)
+    bool _set_telem_data(const uint8_t frame, const uint16_t appid, const uint32_t data);
+#endif
+
     static AP_Frsky_Telem *singleton;
 
     // use_external_data is set when this library will
