@@ -328,3 +328,10 @@ void SRV_Channels::push()
     }
 #endif // HAL_NUM_CAN_IFACES
 }
+
+void SRV_Channels::zero_rc_outputs()
+{
+    for (int i=0; i<NUM_RC_CHANNELS; i++) {
+        hal.rcout->write(i, 0);
+    }
+}
