@@ -156,8 +156,8 @@ void AP_Frsky_Telem::process_packet(uint8_t idx)
             break;
         case GPS_LAT: // 0x800 GPS lat
             // sample both lat and lon at the same time
-            send_sport_frame(SPORT_DATA_FRAME, GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(&_passthrough.send_latitude)); // gps latitude or longitude
-            _passthrough.gps_lng_sample = calc_gps_latlng(&_passthrough.send_latitude);
+            send_sport_frame(SPORT_DATA_FRAME, GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(_passthrough.send_latitude)); // gps latitude or longitude
+            _passthrough.gps_lng_sample = calc_gps_latlng(_passthrough.send_latitude);
             // force the scheduler to select GPS lon as packet that's been waiting the most
             // this guarantees that gps coords are sent at max 
             // _scheduler.avg_polling_period*number_of_downlink_sensors time separation
@@ -196,13 +196,7 @@ void AP_Frsky_Telem::process_packet(uint8_t idx)
  */
 void AP_Frsky_Telem::send_SPort_Passthrough(void)
 {
-    int16_t numc;
-    numc = _port->available();
-
-    // check if available is negative
-    if (numc < 0) {
-        return;
-    }
+    const uint16_t numc = MIN(_port->available(), 1024U);
 
     // this is the constant for hub data frame
     if (_port->txspace() < 19) {
@@ -210,7 +204,7 @@ void AP_Frsky_Telem::send_SPort_Passthrough(void)
     }
     // keep only the last two bytes of the data found in the serial buffer, as we shouldn't respond to old poll requests
     uint8_t prev_byte = 0;
-    for (int16_t i = 0; i < numc; i++) {
+    for (uint16_t i = 0; i < numc; i++) {
         prev_byte = _passthrough.new_byte;
         _passthrough.new_byte = _port->read();
     }
@@ -227,13 +221,7 @@ void AP_Frsky_Telem::send_SPort_Passthrough(void)
  */
 void AP_Frsky_Telem::send_SPort(void)
 {
-    int16_t numc;
-    numc = _port->available();
-
-    // check if available is negative
-    if (numc < 0) {
-        return;
-    }
+    const uint16_t numc = MIN(_port->available(), 1024U);
 
     // this is the constant for hub data frame
     if (_port->txspace() < 19) {
@@ -253,7 +241,7 @@ void AP_Frsky_Telem::send_SPort(void)
         return;
     }
 
-    for (int16_t i = 0; i < numc; i++) {
+    for (uint16_t i = 0; i < numc; i++) {
         int16_t readbyte = _port->read();
         if (_SPort.sport_status == false) {
             if  (readbyte == FRAME_HEAD) {
@@ -305,10 +293,10 @@ void AP_Frsky_Telem::send_SPort(void)
                 case SENSOR_ID_GPS: // Sensor ID  3
                     switch (_SPort.gps_call) {
                         case 0:
-                            send_sport_frame(SPORT_DATA_FRAME, GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(&_passthrough.send_latitude)); // gps latitude or longitude
+                            send_sport_frame(SPORT_DATA_FRAME, GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(_passthrough.send_latitude)); // gps latitude or longitude
                             break;
                         case 1:
-                            send_sport_frame(SPORT_DATA_FRAME, GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(&_passthrough.send_latitude)); // gps latitude or longitude
+                            send_sport_frame(SPORT_DATA_FRAME, GPS_LONG_LATI_FIRST_ID, calc_gps_latlng(_passthrough.send_latitude)); // gps latitude or longitude
                             break;
                         case 2:
                             send_sport_frame(SPORT_DATA_FRAME, DATA_ID_GPS_SPEED_BP, _SPort_data.speed_in_meter); // send gps speed integer part
@@ -489,10 +477,10 @@ void  AP_Frsky_Telem::send_sport_frame(uint8_t frame, uint16_t appid, uint32_t d
       this leaves us with up to 10ms to respond but to play it safe we
       allow no more than 7500us
      */
-    uint64_t tend = _port->receive_time_constraint_us(1);
-    uint64_t now = AP_HAL::micros64();
-    uint64_t tdelay = now - tend;
-    if (tdelay > 7500) {
+    const uint64_t tend_us = port->receive_time_constraint_us(1);
+    const uint64_t now_us = AP_HAL::micros64();
+    const uint64_t tdelay_us = now_us - tend_us;
+    if (tdelay_us > 7500) {
         // we've been too slow in responding
         return;
     }
@@ -531,14 +519,14 @@ bool AP_Frsky_Telem::get_next_msg_chunk(void)
         uint8_t character = 0;
         _msg_chunk.chunk = 0; // clear the 4 bytes of the chunk buffer
 
-        for (int i = 3; i > -1 && _msg_chunk.char_index < sizeof(_statustext.next.text); i--) {
+        for (uint8_t i = 0; i < 4 && _msg_chunk.char_index < sizeof(_statustext.next.text); i++) {
             character = _statustext.next.text[_msg_chunk.char_index++];
 
             if (!character) {
                 break;
             }
 
-            _msg_chunk.chunk |= character << i * 8;
+            _msg_chunk.chunk |= character << (3-i) * 8;
         }
 
         if (!character || (_msg_chunk.char_index == sizeof(_statustext.next.text))) { // we've reached the end of the message (string terminated by '\0' or last character of the string has been processed)
@@ -563,7 +551,7 @@ bool AP_Frsky_Telem::get_next_msg_chunk(void)
         // send messages twice
         extra_chunks = 1;
     }
-    
+
     if (_msg_chunk.repeats++ > extra_chunks ) {
         _msg_chunk.repeats = 0;
         if (_msg_chunk.char_index == 0) {
@@ -615,28 +603,26 @@ uint32_t AP_Frsky_Telem::calc_param(void)
  * prepare gps latitude/longitude data
  * for FrSky SPort Passthrough (OpenTX) protocol (X-receivers)
  */
-uint32_t AP_Frsky_Telem::calc_gps_latlng(bool *send_latitude)
+uint32_t AP_Frsky_Telem::calc_gps_latlng(bool &send_latitude)
 {
-    uint32_t latlng;
     const Location &loc = AP::gps().location(0); // use the first gps instance (same as in send_mavlink_gps_raw)
 
     // alternate between latitude and longitude
-    if ((*send_latitude) == true) {
+    if (send_latitude == true) {
+        send_latitude = false;
         if (loc.lat < 0) {
-            latlng = ((labs(loc.lat)/100)*6) | 0x40000000;
+            return ((labs(loc.lat)/100)*6) | 0x40000000;
         } else {
-            latlng = ((labs(loc.lat)/100)*6);
+            return ((labs(loc.lat)/100)*6);
         }
-        (*send_latitude) = false;
     } else {
+        send_latitude = true;
         if (loc.lng < 0) {
-            latlng = ((labs(loc.lng)/100)*6) | 0xC0000000;
+            return ((labs(loc.lng)/100)*6) | 0xC0000000;
         } else {
-            latlng = ((labs(loc.lng)/100)*6) | 0x80000000;
+            return ((labs(loc.lng)/100)*6) | 0x80000000;
         }
-        (*send_latitude) = true;
     }
-    return latlng;
 }
 
 /*
@@ -646,20 +632,17 @@ uint32_t AP_Frsky_Telem::calc_gps_latlng(bool *send_latitude)
 uint32_t AP_Frsky_Telem::calc_gps_status(void)
 {
     const AP_GPS &gps = AP::gps();
-
-    uint32_t gps_status;
-
     // number of GPS satellites visible (limit to 15 (0xF) since the value is stored on 4 bits)
-    gps_status = (gps.num_sats() < GPS_SATS_LIMIT) ? gps.num_sats() : GPS_SATS_LIMIT;
+    uint32_t gps_status = (gps.num_sats() < GPS_SATS_LIMIT) ? gps.num_sats() : GPS_SATS_LIMIT;
     // GPS receiver status (limit to 0-3 (0x3) since the value is stored on 2 bits: NO_GPS = 0, NO_FIX = 1, GPS_OK_FIX_2D = 2, GPS_OK_FIX_3D or GPS_OK_FIX_3D_DGPS or GPS_OK_FIX_3D_RTK_FLOAT or GPS_OK_FIX_3D_RTK_FIXED = 3)
     gps_status |= ((gps.status() < GPS_STATUS_LIMIT) ? gps.status() : GPS_STATUS_LIMIT)<<GPS_STATUS_OFFSET;
     // GPS horizontal dilution of precision in dm
-    gps_status |= prep_number(roundf(gps.get_hdop() * 0.1f),2,1)<<GPS_HDOP_OFFSET; 
+    gps_status |= prep_number(roundf(gps.get_hdop() * 0.1f),2,1)<<GPS_HDOP_OFFSET;
     // GPS receiver advanced status (0: no advanced fix, 1: GPS_OK_FIX_3D_DGPS, 2: GPS_OK_FIX_3D_RTK_FLOAT, 3: GPS_OK_FIX_3D_RTK_FIXED)
     gps_status |= ((gps.status() > GPS_STATUS_LIMIT) ? gps.status()-GPS_STATUS_LIMIT : 0)<<GPS_ADVSTATUS_OFFSET;
     // Altitude MSL in dm
     const Location &loc = gps.location();
-    gps_status |= prep_number(roundf(loc.alt * 0.1f),2,2)<<GPS_ALTMSL_OFFSET; 
+    gps_status |= prep_number(roundf(loc.alt * 0.1f),2,2)<<GPS_ALTMSL_OFFSET;
     return gps_status;
 }
 
@@ -667,11 +650,10 @@ uint32_t AP_Frsky_Telem::calc_gps_status(void)
  * prepare battery data
  * for FrSky SPort Passthrough (OpenTX) protocol (X-receivers)
  */
-uint32_t AP_Frsky_Telem::calc_batt(uint8_t instance)
+uint32_t AP_Frsky_Telem::calc_batt(const uint8_t instance)
 {
     const AP_BattMonitor &_battery = AP::battery();
 
-    uint32_t batt;
     float current, consumed_mah;
     if (!_battery.current_amps(current, instance)) {
         current = 0;
@@ -681,7 +663,7 @@ uint32_t AP_Frsky_Telem::calc_batt(uint8_t instance)
     }
     
     // battery voltage in decivolts, can have up to a 12S battery (4.25Vx12S = 51.0V)
-    batt = (((uint16_t)roundf(_battery.voltage(instance) * 10.0f)) & BATT_VOLTAGE_LIMIT);
+    uint32_t batt = (((uint16_t)roundf(_battery.voltage(instance) * 10.0f)) & BATT_VOLTAGE_LIMIT);
     // battery current draw in deciamps
     batt |= prep_number(roundf(current * 10.0f), 2, 1)<<BATT_CURRENT_OFFSET;
     // battery current drawn since power on in mAh (limit to 32767 (0x7FFF) since value is stored on 15 bits)
@@ -695,13 +677,11 @@ uint32_t AP_Frsky_Telem::calc_batt(uint8_t instance)
  */
 uint32_t AP_Frsky_Telem::calc_ap_status(void)
 {
-    uint32_t ap_status;
-
     // IMU temperature: offset -19, 0 means temp =< 19°, 63 means temp => 82°
     uint8_t imu_temp = (uint8_t) roundf(constrain_float(AP::ins().get_temperature(0), AP_IMU_TEMP_MIN, AP_IMU_TEMP_MAX) - AP_IMU_TEMP_MIN);
 
     // control/flight mode number (limit to 31 (0x1F) since the value is stored on 5 bits)
-    ap_status = (uint8_t)((gcs().custom_mode()+1) & AP_CONTROL_MODE_LIMIT);
+    uint32_t ap_status = (uint8_t)((gcs().custom_mode()+1) & AP_CONTROL_MODE_LIMIT);
     // simple/super simple modes flags
     ap_status |= (uint8_t)(gcs().simple_input_active())<<AP_SIMPLE_OFFSET;
     ap_status |= (uint8_t)(gcs().supersimple_input_active())<<AP_SSIMPLE_OFFSET;
@@ -715,8 +695,6 @@ uint32_t AP_Frsky_Telem::calc_ap_status(void)
     ap_status |= (uint8_t)(AP_Notify::flags.ekf_bad)<<AP_EKF_FS_OFFSET;
     // IMU temperature
     ap_status |= imu_temp << AP_IMU_TEMP_OFFSET;
-    //hal.console->printf("flying=%d\n",AP_Notify::flags.flying);    
-    //hal.console->printf("ap_status=%08X\n",ap_status);    
     return ap_status;
 }
 
@@ -729,17 +707,17 @@ uint32_t AP_Frsky_Telem::calc_home(void)
     uint32_t home = 0;
     Location loc;
     Location home_loc;
-    bool get_position;
+    bool got_position = false;
     float _relative_home_altitude = 0;
 
     {
         AP_AHRS &_ahrs = AP::ahrs();
         WITH_SEMAPHORE(_ahrs.get_semaphore());
-        get_position = _ahrs.get_position(loc);
+        got_position = _ahrs.get_position(loc);
         home_loc = _ahrs.get_home();
     }
 
-    if (get_position) {            
+    if (got_position) {
         // check home_loc is valid
         if (home_loc.lat != 0 || home_loc.lng != 0) {
             // distance between vehicle and home_loc in meters
@@ -790,10 +768,9 @@ uint32_t AP_Frsky_Telem::calc_attiandrng(void)
 {
     const RangeFinder *_rng = RangeFinder::get_singleton();
 
-    uint32_t attiandrng;
     AP_AHRS &_ahrs = AP::ahrs();
     // roll from [-18000;18000] centidegrees to unsigned .2 degree increments [0;1800] (just in case, limit to 2047 (0x7FF) since the value is stored on 11 bits)
-    attiandrng = ((uint16_t)roundf((_ahrs.roll_sensor + 18000) * 0.05f) & ATTIANDRNG_ROLL_LIMIT);
+    uint32_t attiandrng = ((uint16_t)roundf((_ahrs.roll_sensor + 18000) * 0.05f) & ATTIANDRNG_ROLL_LIMIT);
     // pitch from [-9000;9000] centidegrees to unsigned .2 degree increments [0;900] (just in case, limit to 1023 (0x3FF) since the value is stored on 10 bits)
     attiandrng |= ((uint16_t)roundf((_ahrs.pitch_sensor + 9000) * 0.05f) & ATTIANDRNG_PITCH_LIMIT)<<ATTIANDRNG_PITCH_OFFSET;
     // rangefinder measurement in cm
@@ -805,7 +782,7 @@ uint32_t AP_Frsky_Telem::calc_attiandrng(void)
  * prepare value for transmission through FrSky link
  * for FrSky SPort Passthrough (OpenTX) protocol (X-receivers)
  */
-uint16_t AP_Frsky_Telem::prep_number(int32_t number, uint8_t digits, uint8_t power)
+uint16_t AP_Frsky_Telem::prep_number(const int32_t number, const uint8_t digits, const uint8_t power)
 {
     uint16_t res = 0;
     uint32_t abs_number = abs(number);
@@ -928,28 +905,23 @@ float AP_Frsky_Telem::format_gps(float dec)
  */
 void AP_Frsky_Telem::calc_gps_position(void)
 {
-    float lat;
-    float lon;
-    float alt;
-    float speed;
-
     if (AP::gps().status() >= 3) {
         const Location &loc = AP::gps().location(); //get gps instance 0
-        lat = format_gps(fabsf(loc.lat/10000000.0f));
+        float lat = format_gps(fabsf(loc.lat/10000000.0f));
         _SPort_data.latdddmm = lat;
         _SPort_data.latmmmm = (lat - _SPort_data.latdddmm) * 10000;
         _SPort_data.lat_ns = (loc.lat < 0) ? 'S' : 'N';
 
-        lon = format_gps(fabsf(loc.lng/10000000.0f));
+        float lon = format_gps(fabsf(loc.lng/10000000.0f));
         _SPort_data.londddmm = lon;
         _SPort_data.lonmmmm = (lon - _SPort_data.londddmm) * 10000;
         _SPort_data.lon_ew = (loc.lng < 0) ? 'W' : 'E';
 
-        alt = loc.alt * 0.01f;
+        float alt = loc.alt * 0.01f;
         _SPort_data.alt_gps_meters = (int16_t)alt;
         _SPort_data.alt_gps_cm = (alt - _SPort_data.alt_gps_meters) * 100;
 
-        speed = AP::gps().ground_speed();
+        float speed = AP::gps().ground_speed();
         _SPort_data.speed_in_meter = speed;
         _SPort_data.speed_in_centimeter = (speed - _SPort_data.speed_in_meter) * 100;
     } else {

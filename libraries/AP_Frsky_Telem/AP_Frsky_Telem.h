@@ -235,14 +235,14 @@ private:
     // methods to convert flight controller data to FrSky SPort Passthrough (OpenTX) format
     bool get_next_msg_chunk(void) override;
     uint32_t calc_param(void);
-    uint32_t calc_gps_latlng(bool *send_latitude);
+    uint32_t calc_gps_latlng(bool &send_latitude);
     uint32_t calc_gps_status(void);
-    uint32_t calc_batt(uint8_t instance);
+    uint32_t calc_batt(const uint8_t instance);
     uint32_t calc_ap_status(void);
     uint32_t calc_home(void);
     uint32_t calc_velandyaw(void);
     uint32_t calc_attiandrng(void);
-    uint16_t prep_number(int32_t number, uint8_t digits, uint8_t power);
+    uint16_t prep_number(const int32_t number, const uint8_t digits, const uint8_t power);
 
     // methods to convert flight controller data to FrSky D or SPort format
     void calc_nav_alt(void);
