@@ -22,7 +22,7 @@
 
 #define FRSKY_TELEM_PAYLOAD_STATUS_CAPACITY          5 // size of the message buffer queue (max number of messages waiting to be sent)
 
-/* 
+/*
 for FrSky D protocol (D-receivers)
 */
 // FrSky sensor hub data IDs
@@ -49,7 +49,7 @@ for FrSky D protocol (D-receivers)
 #define START_STOP_D                0x5E
 #define BYTESTUFF_D                 0x5D
 
-/* 
+/*
 for FrSky SPort and SPort Passthrough (OpenTX) protocols (X-receivers)
 */
 // FrSky Sensor IDs
@@ -68,7 +68,7 @@ for FrSky SPort and SPort Passthrough (OpenTX) protocols (X-receivers)
 #define FRAME_XOR                   0x20
 
 #define SPORT_DATA_FRAME            0x10
-/* 
+/*
 for FrSky SPort Passthrough
 */
 // data bits preparation
@@ -114,7 +114,8 @@ for FrSky SPort Passthrough
 // for fair scheduler
 #define TIME_SLOT_MAX               11
 
-class AP_Frsky_Telem : public AP_RCTelemetry {
+class AP_Frsky_Telem : public AP_RCTelemetry
+{
 public:
     AP_Frsky_Telem(bool external_data=false);
 
@@ -127,7 +128,8 @@ public:
     // init - perform required initialisation
     virtual bool init() override;
 
-    static AP_Frsky_Telem *get_singleton(void) {
+    static AP_Frsky_Telem *get_singleton(void)
+    {
         return singleton;
     }
 
@@ -140,7 +142,7 @@ private:
     uint16_t _crc;
 
     uint8_t _paramID;
-    
+
     enum PassthroughPacketType : uint8_t {
         TEXT =          0,  // 0x5000 status text (dynamic)
         ATTITUDE =      1,  // 0x5006 Attitude and range (dynamic)
@@ -163,8 +165,7 @@ private:
         BATT_CAPACITY_2 =     5
     };
 
-    struct
-    {
+    struct {
         int32_t vario_vspd;
         char lat_ns, lon_ew;
         uint16_t latdddmm;
@@ -180,15 +181,13 @@ private:
         uint16_t yaw;
     } _SPort_data;
 
-    struct PACKED
-    {
+    struct PACKED {
         bool send_latitude; // sizeof(bool) = 4 ?
         uint32_t gps_lng_sample;
         uint8_t new_byte;
     } _passthrough;
 
-    struct
-    {
+    struct {
         bool sport_status;
         bool gps_refresh;
         bool vario_refresh;
@@ -197,20 +196,18 @@ private:
         uint8_t vario_call;
         uint8_t various_call;
     } _SPort;
-    
-    struct
-    {
+
+    struct {
         uint32_t last_200ms_frame;
         uint32_t last_1000ms_frame;
     } _D;
-    
-    struct
-    {
+
+    struct {
         uint32_t chunk; // a "chunk" (four characters/bytes) at a time of the queued message to be sent
         uint8_t repeats; // send each message "chunk" 3 times to make sure the entire messsage gets through without getting cut
         uint8_t char_index; // index of which character to get in the message
     } _msg_chunk;
-    
+
     float get_vspeed_ms(void);
     // passthrough WFQ scheduler
     bool is_packet_ready(uint8_t idx, bool queue_empty) override;
@@ -251,7 +248,7 @@ private:
 
     // get next telemetry data for external consumers of SPort data (internal function)
     bool _get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data);
-    
+
     static AP_Frsky_Telem *singleton;
 
     // use_external_data is set when this library will
@@ -265,6 +262,7 @@ private:
     } external_data;
 };
 
-namespace AP {
-    AP_Frsky_Telem *frsky_telem();
+namespace AP
+{
+AP_Frsky_Telem *frsky_telem();
 };
