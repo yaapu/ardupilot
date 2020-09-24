@@ -76,18 +76,32 @@ void AP_CRSF_Telem::setup_wfq_scheduler(void)
     add_scheduler_entry(1300, 500); // battery           2Hz
     add_scheduler_entry(550, 280);  // GPS               3Hz
     add_scheduler_entry(550, 500);  // flight mode       2Hz
+    add_scheduler_entry(5000, 25);  // passthrough      40Hz
 }
 
 void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
 {
+    if (rc().crsf_passthrough_data()) {
+        // raise passthrough
+        set_scheduler_entry(PASSTHROUGH, 25, 25);
+    } else {
+        // lower passthrough
+        set_scheduler_entry(PASSTHROUGH, 5000, 25);
+    }
 }
 
 // WFQ scheduler
 bool AP_CRSF_Telem::is_packet_ready(uint8_t idx, bool queue_empty)
 {
     switch (idx) {
+    case ATTITUDE:
+    case BATTERY: // BATTERY
+    case FLIGHT_MODE: // GPS
+        return !rc().crsf_passthrough_data();
     case PARAMETERS:
         return AP::vtx().have_params_changed() ||_vtx_power_change_pending || _vtx_freq_change_pending || _vtx_options_change_pending;
+    case PASSTHROUGH:
+        return rc().crsf_passthrough_data();
     default:
         return _enable_telemetry;
     }
@@ -115,6 +129,9 @@ void AP_CRSF_Telem::process_packet(uint8_t idx)
             break;
         case FLIGHT_MODE: // GPS
             calc_flight_mode();
+            break;
+        case PASSTHROUGH:
+            get_passthrough_telem_data();
             break;
         default:
             break;
@@ -403,6 +420,33 @@ void AP_CRSF_Telem::calc_flight_mode()
         _telem_size = sizeof(AP_CRSF_Telem::FlightModeFrame);
         _telem_type = AP_RCProtocol_CRSF::CRSF_FRAMETYPE_FLIGHT_MODE;
         _telem_pending = true;
+    }
+}
+
+// get passthrough telemetry data
+void AP_CRSF_Telem::get_passthrough_telem_data()
+{
+    uint8_t frame;
+    uint16_t appid;
+    uint32_t data;
+
+    _telem_pending = false;
+    /*
+     we want to fill all CRSF slots so we call get_telem_data() multiple times (no more than 10)
+     until we get valid data. We are not interested in GPS so we discard that as well
+     */
+    for (uint8_t i=0; i<10; i++) {
+        if (AP_Frsky_Telem::get_telem_data(frame, appid, data)) {
+            if (appid != 0x800) {
+                _telem.bcast.passthrough.appid = appid;
+                _telem.bcast.passthrough.data = data;
+                _telem_size = sizeof(AP_CRSF_Telem::PassthroughFrame);
+                _telem_type = AP_RCProtocol_CRSF::CRSF_FRAMETYPE_PASSTHROUGH;
+
+                _telem_pending = true;
+                return;
+            }
+        }
     }
 }
 

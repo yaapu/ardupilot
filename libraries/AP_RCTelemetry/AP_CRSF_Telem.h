@@ -114,6 +114,12 @@ public:
         uint8_t origin;
     } PACKED;
 
+    // CRSF_PASSTROUGH_V1_FRAME
+    struct PassthroughFrame {
+        uint16_t appid;
+        uint32_t data;
+    } PACKED;
+
     union BroadcastFrame {
         GPSFrame gps;
         HeartbeatFrame heartbeat;
@@ -121,6 +127,7 @@ public:
         VTXFrame vtx;
         AttitudeFrame attitude;
         FlightModeFrame flightmode;
+        PassthroughFrame passthrough;
     } PACKED;
 
     union ExtendedFrame {
@@ -149,6 +156,7 @@ private:
         BATTERY,
         GPS,
         FLIGHT_MODE,
+        PASSTHROUGH,
         NUM_SENSORS
     };
 
@@ -164,6 +172,7 @@ private:
     void calc_attitude();
     void calc_flight_mode();
     void update_params();
+    void get_passthrough_telem_data();
 
     void process_vtx_frame(VTXFrame* vtx);
     void process_vtx_telem_frame(VTXTelemetryFrame* vtx);

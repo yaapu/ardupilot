@@ -55,6 +55,8 @@ public:
         CRSF_FRAMETYPE_PARAMETER_READ = 0x2C,
         CRSF_FRAMETYPE_PARAMETER_WRITE = 0x2D,
         CRSF_FRAMETYPE_COMMAND = 0x32,
+        // Passthrough
+        CRSF_FRAMETYPE_PASSTHROUGH = 0x80,
     };
 
     // Command IDs for CRSF_FRAMETYPE_COMMAND
