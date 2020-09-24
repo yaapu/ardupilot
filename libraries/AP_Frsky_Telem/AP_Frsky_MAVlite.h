@@ -1,5 +1,6 @@
 #pragma once
 
+<<<<<<< HEAD
 /*
 
   Wire Protocol:
@@ -21,6 +22,8 @@
 */
 
 
+=======
+>>>>>>> AP_Frsky_Telem: rework SPort-to-MAVlite conversion
 #define MAVLITE_MAX_PAYLOAD_LEN                 31 // 7 float params + cmd_id + options
 #define MAVLITE_MSG_SPORT_PACKETS_COUNT(LEN)    static_cast<uint8_t>(1 + ceilf((LEN-2)/5.0f)) // number of sport packets required to transport a message with LEN payload
 #define SPORT_PACKET_QUEUE_LENGTH               static_cast<uint8_t>(30U*MAVLITE_MSG_SPORT_PACKETS_COUNT(MAVLITE_MAX_PAYLOAD_LEN))
