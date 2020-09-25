@@ -472,8 +472,8 @@ void  AP_Frsky_Telem::send_sport_frame(uint8_t frame, uint16_t appid, uint32_t d
     uint8_t buf2[sizeof(buf)*2+1];
 
     for (uint8_t i=0; i<sizeof(buf); i++) {
-        uint8_t c = buf[i];
-        if (c == FRAME_DLE || buf[i] == FRAME_HEAD) {
+        const uint8_t c = buf[i];
+        if (c == FRAME_DLE || c == FRAME_HEAD) {
             buf2[len++] = FRAME_DLE;
             buf2[len++] = c ^ FRAME_XOR;
         } else {
