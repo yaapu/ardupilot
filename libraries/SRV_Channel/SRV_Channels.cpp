@@ -331,7 +331,9 @@ void SRV_Channels::push()
 
 void SRV_Channels::zero_rc_outputs()
 {
+    cork();
     for (int i=0; i<NUM_RC_CHANNELS; i++) {
         hal.rcout->write(i, 0);
     }
+    push();
 }
