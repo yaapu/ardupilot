@@ -30,4 +30,7 @@ private:
 
     AP_Frsky_MAVlite_Message _rxmsg;
     void parse(const uint8_t byte);
+
+    int16_t checksum;                       // sent at end of packet
+    void update_checksum(const uint8_t c);
 };

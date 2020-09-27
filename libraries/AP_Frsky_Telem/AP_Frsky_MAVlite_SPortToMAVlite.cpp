@@ -4,11 +4,18 @@
 
 void AP_Frsky_MAVlite_SPortToMAVlite::reset(void)
 {
-    _rxmsg.checksum = 0;
+    checksum = 0;
 
     expected_seq = 0;
     payload_next_byte = 0;
     parse_state = State::WANT_LEN;
+}
+
+void AP_Frsky_MAVlite_SPortToMAVlite::update_checksum(const uint8_t c)
+{
+    checksum += c; //0-1FF
+    checksum += checksum >> 8;
+    checksum &= 0xFF;
 }
 
 /*
@@ -29,7 +36,7 @@ bool AP_Frsky_MAVlite_SPortToMAVlite::process(AP_Frsky_MAVlite_Message &rxmsg, c
         parse_state = State::ERROR;
         return false;
     }
-    _rxmsg.update_checksum(received_seq);
+    update_checksum(received_seq);
     expected_seq = received_seq + 1;
 
     // deal with the remainder (post-sequence) of the packet:
@@ -59,13 +66,13 @@ void AP_Frsky_MAVlite_SPortToMAVlite::parse(uint8_t byte)
 
     case State::WANT_LEN:
         _rxmsg.len = byte;
-        _rxmsg.update_checksum(byte);
+        update_checksum(byte);
         parse_state = State::WANT_MSGID;
         return;
 
     case State::WANT_MSGID:
         _rxmsg.msgid = byte;
-        _rxmsg.update_checksum(byte);
+        update_checksum(byte);
         if (_rxmsg.len == 0) {
             parse_state = State::WANT_CHECKSUM;
         } else {
@@ -76,7 +83,7 @@ void AP_Frsky_MAVlite_SPortToMAVlite::parse(uint8_t byte)
     case State::WANT_PAYLOAD:
         // add byte to payload
         _rxmsg.payload[payload_next_byte++] = byte;
-        _rxmsg.update_checksum(byte);
+        update_checksum(byte);
 
         if (payload_next_byte >= _rxmsg.len) {
             parse_state = State::WANT_CHECKSUM;
@@ -84,7 +91,7 @@ void AP_Frsky_MAVlite_SPortToMAVlite::parse(uint8_t byte)
         return;
 
     case State::WANT_CHECKSUM:
-        if (_rxmsg.checksum != byte) {
+        if (checksum != byte) {
             parse_state = State::ERROR;
             return;
         }
