@@ -540,20 +540,28 @@ class FRSkyD(FRSky):
 
 
 class SPortPacket(object):
-    def __init__(self, sensor, frame, appid0, appid1, data0, data1, data2, data3):
-        self.sensor = sensor
-        self.frame = frame
+    def __init__(self):
+        self.START_STOP_SPORT = 0x7E
+        self.BYTESTUFF_SPORT  = 0x7D
+
+class SPortUplinkPacket(SPortPacket):
+    def __init__(self, appid0, appid1, data0, data1, data2, data3):
+        super(SPortUplinkPacket, self).__init__()
         self.appid0 = appid0
         self.appid1 = appid1
         self.data0 = data0
         self.data1 = data1
         self.data2 = data2
         self.data3 = data3
+        self.SENSOR_ID_UPLINK_ID         = 0x0D
+        self.SPORT_UPLINK_FRAME          = 0x30
+        self.uplink_id = self.SENSOR_ID_UPLINK_ID
+        self.frame = self.SPORT_UPLINK_FRAME
 
     def packed(self):
         return struct.pack('<BBBBBBBB',
-                           self.sensor & 0xff,
-                           self.frame & 0xff,
+                           self.uplink_id,
+                           self.frame,
                            self.appid0 & 0xff,
                            self.appid1 & 0xff,
                            self.data0 & 0xff,
@@ -578,6 +586,34 @@ class SPortPacket(object):
         self.update_checksum(self.data3 & 0xff)
         self.checksum = 0xff - ((self.checksum & 0xff) + (self.checksum >> 8));
         return self.checksum & 0xff
+
+    def for_wire(self):
+        out = bytearray()
+        out.extend(self.packed())
+        out.append(struct.pack('<B', self.checksum()))
+        stuffed = bytearray()
+        stuffed.append(struct.pack('<B', self.START_STOP_SPORT))
+        for pbyte in out:
+            if pbyte in [self.BYTESTUFF_SPORT,
+                         self.START_STOP_SPORT]:
+                # bytestuff
+                stuffed.append(self.BYTESTUFF_SPORT)
+                stuffed.append(pbyte ^ self.SPORT_FRAME_XOR)
+            else:
+                stuffed.append(pbyte)
+        return stuffed
+
+
+class SPortPollPacket(SPortPacket):
+    def __init__(self, sensor):
+        super(SPortPollPacket, self).__init__()
+        self.sensor = sensor
+
+    def for_wire(self):
+        return struct.pack('<BB',
+                           self.START_STOP_SPORT,
+                           self.sensor & 0xff,
+        )
 
 class MAVliteMessage(object):
     def __init__(self, msgid, body):
@@ -621,9 +657,7 @@ class MAVliteMessage(object):
             chunk = sequenced[0:6]
             sequenced = sequenced[6:]
             chunk.extend([0] * (6-len(chunk))) # pad to 6
-            packet = SPortPacket(
-                self.SENSOR_ID_UPLINK_ID,
-                self.SPORT_UPLINK_FRAME,
+            packet = SPortUplinkPacket(
                 *chunk
             )
             ret.append(packet)
@@ -849,16 +883,7 @@ class FRSkySPort(FRSky):
             if sensor_id not in self.sensor_id_poll_counts:
                 self.sensor_id_poll_counts[sensor_id] = 0
             self.sensor_id_poll_counts[sensor_id] += 1
-            packet = SPortPacket(
-                sensor_id,
-                0,  # frame
-                0,  # appid0
-                0,  # appid1
-                0,  # data0
-                0,  # data1
-                0,  # data2
-                0,  # data3
-            )
+            packet = SPortPollPacket(sensor_id)
             self.send_sport_packet(packet)
             self.state = self.state_WANT_FRAME_TYPE
             self.poll_sent = now
@@ -868,20 +893,7 @@ class FRSkySPort(FRSky):
             self.send_sport_packet(packet)
 
     def send_sport_packet(self, packet):
-        out = bytearray()
-        out.extend(packet.packed())
-        out.append(struct.pack('<B', packet.checksum()))
-        stuffed = bytearray()
-        stuffed.append(struct.pack('<B', self.START_STOP_SPORT))
-        for pbyte in out:
-            if pbyte in [self.BYTESTUFF_SPORT,
-                         self.START_STOP_SPORT]:
-                # bytestuff
-                stuffed.append(self.BYTESTUFF_SPORT)
-                stuffed.append(pbyte ^ self.SPORT_FRAME_XOR)
-            else:
-                stuffed.append(pbyte)
-
+        stuffed = packet.for_wire()
         self.progress("Sending (%s) (%u)" % (["0x%02x" % x for x in bytearray(stuffed)],len(stuffed)))
         self.port.sendall(stuffed)
 
