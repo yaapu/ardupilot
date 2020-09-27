@@ -625,9 +625,9 @@ class MAVliteMessage(object):
     def checksum_bytes(self, some_bytes):
         checksum = 0
         for b in some_bytes:
-            checksum += b;
-            checksum += checksum >> 8;
-            checksum &= 0xFF;
+            checksum += b
+            checksum += checksum >> 8
+            checksum &= 0xFF
         return checksum
 
     def to_sport_packets(self):
@@ -733,7 +733,7 @@ class SPortToMAVlite(object):
 
 
 class FRSkySPort(FRSky):
-    def __init__(self, destination_address, verbose=False):
+    def __init__(self, destination_address, verbose=True):
         super(FRSkySPort, self).__init__(destination_address)
 
         self.state_SEND_POLL = "sendpoll"
