@@ -259,20 +259,6 @@ void AP_Frsky_Telem::process_packet(uint8_t idx)
 }
 
 /*
- * true if we need to respond to the last polling byte
- * for FrSky SPort Passthrough (OpenTX) protocol (X-receivers)
- */
-bool AP_Frsky_Telem::is_passthrough_byte(const uint8_t byte)
-{
-#if HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
-    if( byte == _SPort_bidir.downlink1_sensor_id || byte == _SPort_bidir.downlink2_sensor_id ) {
-        return true;
-    }
-#endif
-    return byte == SENSOR_ID_27;
-}
-
-/*
  * send telemetry data
  * for FrSky SPort Passthrough (OpenTX) protocol (X-receivers)
  */
@@ -286,6 +272,7 @@ void AP_Frsky_Telem::send_SPort_Passthrough(void)
     }
     // keep only the last two bytes of the data found in the serial buffer, as we shouldn't respond to old poll requests
     uint8_t prev_byte = 0;
+    bool seen_sport_packet = false;
     for (uint16_t i = 0; i < numc; i++) {
         prev_byte = _passthrough.new_byte;
         _passthrough.new_byte = _port->read();
@@ -294,11 +281,13 @@ void AP_Frsky_Telem::send_SPort_Passthrough(void)
 
         if (_sport_handler.process_byte(sp, _passthrough.new_byte)) {
             queue_sport_rx_packet(sp);
+            seen_sport_packet = true;
         }
 #endif //HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
     }
     // check if we should respond to this polling byte
-    if (prev_byte == FRAME_HEAD && is_passthrough_byte(_passthrough.new_byte)) {
+    if ((prev_byte == FRAME_HEAD && _passthrough.new_byte == SENSOR_ID_27) ||
+        seen_sport_packet) {
         run_wfq_scheduler();
     }
 }
