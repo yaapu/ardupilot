@@ -10,7 +10,9 @@
 
   If the first byte of any SPort message is 0x00 then the parser is reset.
 
-  The first sport packet contains len (at offset 0), msgid then payload bytes.
+  The first sport packet contains len at offset 0.  It is the
+  *payload* length - does not include checksum, for example.  msgid is
+  at offset 1, then payload bytes.
 
   Subsequent SPort packets contain a sequence number (starting at 1), followed by more payload bytes.
 
