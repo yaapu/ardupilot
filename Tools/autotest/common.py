@@ -1035,6 +1035,10 @@ class FRSkySPort(FRSky):
                     else:
                         self.handle_data(dataid, self.data)
                 self.state = self.state_SEND_POLL
+            elif self.state == self.state_SEND_POLL:
+                # this is done in check_poll
+                print("in send_poll state")
+                pass
             else:
                 raise ValueError("Unknown state (%s)" % self.state)
 
