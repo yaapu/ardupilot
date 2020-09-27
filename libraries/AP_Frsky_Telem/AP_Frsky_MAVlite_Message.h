@@ -34,9 +34,6 @@ public:
     uint8_t msgid = 0;                          // ID of message in payload
     uint8_t len = 0;                            // Length of payload
     uint8_t payload[MAVLITE_MAX_PAYLOAD_LEN];
-    int16_t checksum = 0;                       // sent at end of packet
-
-    void update_checksum(const uint8_t c);
 
     static void bit8_pack(uint8_t &value, const uint8_t bit_value, const uint8_t bit_count, const uint8_t bit_offset);
     static uint8_t bit8_unpack(const uint8_t value, const  uint8_t bit_count, const uint8_t bit_offset);

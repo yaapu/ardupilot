@@ -10,7 +10,9 @@
 class AP_Frsky_MAVlite_MAVliteToSPort {
 public:
 
-    bool process(ObjectBuffer_TS<AP_Frsky_SPort::sport_packet_t> &queue, AP_Frsky_MAVlite_Message &msg);
+    // insert sport packets calculated from mavlite msg into queue
+    bool process(ObjectBuffer_TS<AP_Frsky_SPort::sport_packet_t> &queue,
+                 const AP_Frsky_MAVlite_Message &msg);
 
 private:
 
@@ -29,6 +31,9 @@ private:
     };
     State parse_state = State::IDLE;
 
-    void reset(AP_Frsky_MAVlite_Message &txmsg);
-    bool encode(uint8_t &byte, uint8_t offset, AP_Frsky_MAVlite_Message &txmsg);
+    void reset();
+    bool encode(uint8_t &byte, uint8_t offset, const AP_Frsky_MAVlite_Message &txmsg);
+
+    int16_t checksum;                       // sent at end of packet
+    void update_checksum(const uint8_t c);
 };

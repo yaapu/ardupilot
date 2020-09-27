@@ -2,13 +2,6 @@
 
 #include <AP_Math/AP_Math.h>
 
-void AP_Frsky_MAVlite_Message::update_checksum(const uint8_t c)
-{
-    checksum += c; //0-1FF
-    checksum += checksum >> 8;
-    checksum &= 0xFF;
-}
-
 bool AP_Frsky_MAVlite_Message::get_bytes(uint8_t *bytes, const uint8_t offset, const uint8_t count) const
 {
     if (offset + count > MAVLITE_MAX_PAYLOAD_LEN) {
