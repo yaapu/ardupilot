@@ -16,23 +16,25 @@ public:
 
 private:
 
-    uint8_t current_rx_seq = 0;
-    uint8_t payload_next_byte = 0;
-
     enum class State : uint8_t {
-        IDLE=0,
-        ERROR,
-        GOT_START,
-        GOT_LEN,
-        GOT_SEQ,
-        GOT_MSGID,
-        GOT_PAYLOAD,
-        MESSAGE_RECEIVED,
+        WANT_LEN,
+        WANT_MSGID,
+        WANT_PAYLOAD,
+        WANT_CHECKSUM,
+        DONE,
     };
-    State parse_state = State::IDLE;
+    State state = State::WANT_LEN;
 
     void reset();
-    bool encode(uint8_t &byte, uint8_t offset, const AP_Frsky_MAVlite_Message &txmsg);
+
+    void process_byte(uint8_t byte, ObjectBuffer_TS<AP_Frsky_SPort::sport_packet_t> &queue);
+
+    AP_Frsky_SPort::sport_packet_t packet {};
+    uint8_t packet_offs = 0;
+
+    uint8_t next_seq = 0;
+    uint8_t payload_count = 0;
+    uint8_t payload_len;
 
     int16_t checksum;                       // sent at end of packet
     void update_checksum(const uint8_t c);
