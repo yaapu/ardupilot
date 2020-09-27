@@ -5,12 +5,10 @@
 void AP_Frsky_MAVlite_SPortToMAVlite::reset(void)
 {
     _rxmsg.checksum = 0;
-    _rxmsg.len = 0;
-    _rxmsg.msgid = 0;
 
     current_rx_seq = 0;
     payload_next_byte = 0;
-    parse_state = State::GOT_START;
+    parse_state = State::WANT_LEN;
 }
 
 /*
@@ -48,61 +46,50 @@ void AP_Frsky_MAVlite_SPortToMAVlite::parse(uint8_t byte, uint8_t offset)
         return;
 
     case State::ERROR:
-        // waiting for offset==0 && byte==0x00 to bump us into GOT_START
+        // waiting for offset==0 && byte==0x00 to bump us into WANT_LEN
         return;
 
-    case State::GOT_START:
+    case State::WANT_LEN:
         _rxmsg.len = byte;
-        parse_state = State::GOT_LEN;
         _rxmsg.update_checksum(byte);
+        parse_state = State::WANT_MSGID;
         return;
 
-    case State::GOT_LEN:
+    case State::WANT_MSGID:
         _rxmsg.msgid = byte;
-        parse_state = State::GOT_MSGID;
         _rxmsg.update_checksum(byte);
+        if (_rxmsg.len == 0) {
+            parse_state = State::WANT_CHECKSUM;
+        } else {
+            parse_state = State::WANT_PAYLOAD;
+        }
         return;
 
-    case State::GOT_MSGID:
-        _rxmsg.payload[payload_next_byte++] = byte;
-        parse_state = State::GOT_PAYLOAD;
+    case State::WANT_PAYLOAD:
         _rxmsg.update_checksum(byte);
-        return;
-
-    case State::GOT_SEQ:
-        if (payload_next_byte < _rxmsg.len) {
-            _rxmsg.payload[payload_next_byte++] = byte;
-            parse_state = State::GOT_PAYLOAD;
-            _rxmsg.update_checksum(byte);
-            return;
-        }
-        if ( _rxmsg.checksum == byte ) {
-            parse_state = State::MESSAGE_RECEIVED;
-            return;
-        }
-        parse_state = State::ERROR;
-        return;
-
-    case State::GOT_PAYLOAD:
         if (offset == 0) {
-            if ((byte & 0x3F) != current_rx_seq + 1) {
+            // start of non-initial SPort packet - make sure seqno is correct
+            const uint8_t received_seq = (byte & 0x3F);
+            if (received_seq != current_rx_seq + 1) {
                 // sequence error
                 parse_state = State::ERROR;
                 return;
             }
-            current_rx_seq = (byte & 0x3F);
-            parse_state = State::GOT_SEQ;
-            _rxmsg.update_checksum(byte);
+            current_rx_seq = received_seq;
             return;
         }
-        if (payload_next_byte < _rxmsg.len) {
-            // still waiting for more body
-            _rxmsg.payload[payload_next_byte++] = byte;
-            _rxmsg.update_checksum(byte);
-            return;
+
+        // add byte to payload
+        _rxmsg.payload[payload_next_byte++] = byte;
+
+        if (payload_next_byte >= _rxmsg.len) {
+            parse_state = State::WANT_CHECKSUM;
         }
-        if ( _rxmsg.checksum != byte ) {
-            // checksum failure
+        return;
+
+    case State::WANT_CHECKSUM:
+        if (_rxmsg.checksum != byte) {
+            gcs().chan(0)->send_text(MAV_SEVERITY_INFO, "checksum error");
             parse_state = State::ERROR;
             return;
         }

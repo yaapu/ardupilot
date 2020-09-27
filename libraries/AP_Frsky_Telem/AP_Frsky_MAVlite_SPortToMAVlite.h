@@ -14,17 +14,16 @@ private:
 
     void reset();
 
-    uint8_t current_rx_seq = 0;
-    uint8_t payload_next_byte = 0;
+    uint8_t current_rx_seq;
+    uint8_t payload_next_byte;
 
     enum class State : uint8_t {
         IDLE=0,
         ERROR,
-        GOT_START,
-        GOT_LEN,
-        GOT_SEQ,
-        GOT_MSGID,
-        GOT_PAYLOAD,
+        WANT_LEN,
+        WANT_MSGID,
+        WANT_PAYLOAD,
+        WANT_CHECKSUM,
         MESSAGE_RECEIVED,
     };
     State parse_state = State::IDLE;
