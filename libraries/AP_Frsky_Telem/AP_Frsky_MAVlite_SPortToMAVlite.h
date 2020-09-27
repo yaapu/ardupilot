@@ -14,7 +14,7 @@ private:
 
     void reset();
 
-    uint8_t current_rx_seq;
+    uint8_t expected_seq;
     uint8_t payload_next_byte;
 
     enum class State : uint8_t {
@@ -29,5 +29,5 @@ private:
     State parse_state = State::IDLE;
 
     AP_Frsky_MAVlite_Message _rxmsg;
-    void parse(const uint8_t byte, const uint8_t offset);
+    void parse(const uint8_t byte);
 };
