@@ -47,6 +47,12 @@
 
 extern const AP_HAL::HAL& hal;
 
+uint32_t byte_read_count;
+uint32_t byte_read_sum;
+uint8_t byte_read_max;
+uint32_t byte_read_last;
+uint32_t byte_read_bigger2;
+
 AP_Frsky_Telem *AP_Frsky_Telem::singleton;
 
 AP_Frsky_Telem::AP_Frsky_Telem(bool _external_data) : AP_RCTelemetry(FRSKY_WFQ_TIME_SLOT_MAX),
@@ -266,13 +272,32 @@ void AP_Frsky_Telem::send_SPort_Passthrough(void)
 {
     const uint16_t numc = MIN(_port->available(), 1024U);
 
+    if (numc > 0) {
+        byte_read_count++;
+        byte_read_sum += numc;
+        if (numc > 2) {
+            byte_read_bigger2++;
+        }
+        byte_read_max = static_cast<uint8_t>(MAX(numc, byte_read_max));
+    }
+
+    const uint32_t now_ms = AP_HAL::millis();
+    if (now_ms - byte_read_last > 2000) {
+        hal.console->printf("count:%lu, avg:%.02f, max:%d, 2ormore:%lu\n", byte_read_count, static_cast<float>(byte_read_sum)/static_cast<float>(byte_read_count), byte_read_max, byte_read_bigger2);
+        byte_read_last = now_ms;
+        byte_read_count=0;
+        byte_read_sum = 0;
+        byte_read_max = 0;
+        byte_read_bigger2 = 0;
+    }
+
     // this is the constant for hub data frame
     if (_port->txspace() < 19) {
         return;
     }
     // keep only the last two bytes of the data found in the serial buffer, as we shouldn't respond to old poll requests
     uint8_t prev_byte = 0;
-    bool seen_sport_packet = false;
+    //bool seen_sport_packet = false;
     for (uint16_t i = 0; i < numc; i++) {
         prev_byte = _passthrough.new_byte;
         _passthrough.new_byte = _port->read();
@@ -281,13 +306,18 @@ void AP_Frsky_Telem::send_SPort_Passthrough(void)
 
         if (_sport_handler.process_byte(sp, _passthrough.new_byte)) {
             queue_sport_rx_packet(sp);
-            seen_sport_packet = true;
+            //seen_sport_packet = true;
         }
 #endif //HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
     }
     // check if we should respond to this polling byte
+    /*
     if ((prev_byte == FRAME_HEAD && _passthrough.new_byte == SENSOR_ID_27) ||
         seen_sport_packet) {
+        run_wfq_scheduler();
+    }
+    */
+    if ((prev_byte == FRAME_HEAD && _passthrough.new_byte == SENSOR_ID_27)) {
         run_wfq_scheduler();
     }
 }
