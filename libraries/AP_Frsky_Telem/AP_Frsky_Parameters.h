@@ -33,7 +33,8 @@ public:
 
 private:
     // settable parameters
-    AP_Int8 _uplink_id;
+    AP_Int8 _uplink1_id;
+    AP_Int8 _uplink2_id;
     AP_Int8 _dnlink1_id;
     AP_Int8 _dnlink2_id;
 };

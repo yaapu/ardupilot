@@ -112,8 +112,8 @@ bool AP_Frsky_SPort::get_packet(sport_packet_t &sport_packet, bool discard_dupli
         0x6A, 	// Physical ID 10 -
         0xCB, 	// Physical ID 11 -
         0xAC, 	// Physical ID 12 -
-        0x0D, 	// Physical ID 13 - Ardupilot/Betaflight UPLINK
-        0x8E, 	// Physical ID 14 -
+        0x0D, 	// Physical ID 13 - Ardupilot/Betaflight UPLINK 1
+        0x8E, 	// Physical ID 14 - Ardupilot/Betaflight UPLINK 2
         0x2F, 	// Physical ID 15 -
         0xD0, 	// Physical ID 16 -
         0x71, 	// Physical ID 17 -

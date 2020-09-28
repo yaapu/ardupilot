@@ -231,7 +231,8 @@ private:
 
     // bidirectional sport telemetry
     struct {
-        uint8_t uplink_sensor_id = 0x0D;
+        uint8_t uplink1_sensor_id = 0x0D;
+        uint8_t uplink2_sensor_id = 0x0D;
         uint8_t downlink1_sensor_id = 0x34;
         uint8_t downlink2_sensor_id = 0x67;
         uint8_t tx_packet_duplicates;
@@ -265,8 +266,8 @@ private:
     void send_byte(uint8_t value);
     void send_uint16(uint16_t id, uint16_t data);
     void send_sport_frame(uint8_t frame, uint16_t appid, uint32_t data);
-    // true if we need to respond to the last polling byte
-    bool is_passthrough_byte(const uint8_t byte);
+    // true if we need to respond to this sensor polling byte
+    bool is_valid_downlink_sensor_id(const uint8_t byte) const;
 
     // methods to convert flight controller data to FrSky SPort Passthrough (OpenTX) format
     bool get_next_msg_chunk(void) override;
@@ -286,6 +287,7 @@ private:
     void calc_gps_position(void);
 
 #if HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
+    bool is_valid_uplink_sensor_id(const uint8_t byte) const;
     bool set_sport_sensor_id(AP_Int8 idx, uint8_t &sensor);
     // tx/rx sport packet processing
     bool parse_sport_rx_data(void);
