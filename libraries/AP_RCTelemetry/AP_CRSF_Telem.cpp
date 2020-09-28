@@ -29,6 +29,7 @@
 
 #if HAL_CRSF_TELEM_ENABLED
 
+#define CRSF_PASSTHROUGH_DEBUG 0
 // #define CRSF_DEBUG
 #ifdef CRSF_DEBUG
 # define debug(fmt, args...)	hal.console->printf("CRSF: " fmt "\n", ##args)
@@ -84,9 +85,17 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
     if (rc().crsf_passthrough_data()) {
         // raise passthrough
         set_scheduler_entry(PASSTHROUGH, 25, 25);
+        // lower non passthrough telemetry
+        set_scheduler_entry(ATTITUDE, 1000, 500);
+        set_scheduler_entry(BATTERY, 1250, 1000);
+        set_scheduler_entry(FLIGHT_MODE, 1000, 1000);
     } else {
         // lower passthrough
         set_scheduler_entry(PASSTHROUGH, 5000, 25);
+        // raise non passthrough telemetry
+        set_scheduler_entry(ATTITUDE, 50, 120);
+        set_scheduler_entry(BATTERY, 1300, 500);
+        set_scheduler_entry(FLIGHT_MODE, 550, 500);
     }
 }
 
@@ -94,10 +103,6 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
 bool AP_CRSF_Telem::is_packet_ready(uint8_t idx, bool queue_empty)
 {
     switch (idx) {
-    case ATTITUDE:
-    case BATTERY: // BATTERY
-    case FLIGHT_MODE: // GPS
-        return !rc().crsf_passthrough_data();
     case PARAMETERS:
         return AP::vtx().have_params_changed() ||_vtx_power_change_pending || _vtx_freq_change_pending || _vtx_options_change_pending;
     case PASSTHROUGH:
@@ -240,6 +245,9 @@ void AP_CRSF_Telem::update()
 
 void AP_CRSF_Telem::update_params()
 {
+#if CRSF_PASSTHROUGH_DEBUG
+    hal.console->printf("params\n");
+#endif
     AP_VideoTX& vtx = AP::vtx();
 
     _vtx_freq_change_pending = vtx.update_band() || vtx.update_channel() || _vtx_freq_change_pending;
@@ -346,6 +354,9 @@ void AP_CRSF_Telem::calc_heartbeat()
 // prepare battery data
 void AP_CRSF_Telem::calc_battery()
 {
+#if CRSF_PASSTHROUGH_DEBUG
+    hal.console->printf("batt\n");
+#endif
     const AP_BattMonitor &_battery = AP::battery();
 
     _telem.bcast.battery.voltage = htobe16(uint16_t(roundf(_battery.voltage(0) * 10.0f)));
@@ -377,6 +388,9 @@ void AP_CRSF_Telem::calc_battery()
 // prepare gps data
 void AP_CRSF_Telem::calc_gps()
 {
+#if CRSF_PASSTHROUGH_DEBUG
+    hal.console->printf("gps\n");
+#endif
     const Location &loc = AP::gps().location(0); // use the first gps instance (same as in send_mavlink_gps_raw)
 
     _telem.bcast.gps.latitude = htobe32(loc.lat);
@@ -395,6 +409,9 @@ void AP_CRSF_Telem::calc_gps()
 // prepare attitude data
 void AP_CRSF_Telem::calc_attitude()
 {
+#if CRSF_PASSTHROUGH_DEBUG
+    hal.console->printf("atti\n");
+#endif
     AP_AHRS &_ahrs = AP::ahrs();
     WITH_SEMAPHORE(_ahrs.get_semaphore());
 
@@ -413,6 +430,9 @@ void AP_CRSF_Telem::calc_attitude()
 // prepare flight mode data
 void AP_CRSF_Telem::calc_flight_mode()
 {
+#if CRSF_PASSTHROUGH_DEBUG
+    hal.console->printf("fmode\n");
+#endif
     AP_Notify * notify = AP_Notify::get_singleton();
     if (notify) {
         hal.util->snprintf(_telem.bcast.flightmode.flight_mode, 16, "%s", notify->get_flight_mode_str());
@@ -426,6 +446,9 @@ void AP_CRSF_Telem::calc_flight_mode()
 // get passthrough telemetry data
 void AP_CRSF_Telem::get_passthrough_telem_data()
 {
+#if CRSF_PASSTHROUGH_DEBUG
+    hal.console->printf("passthrough\n");
+#endif
     uint8_t frame;
     uint16_t appid;
     uint32_t data;
