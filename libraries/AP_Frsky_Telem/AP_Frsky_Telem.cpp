@@ -57,7 +57,7 @@ bool AP_Frsky_Telem::init(bool use_external_data)
         _backend = new AP_Frsky_D(port);
     } else if ((port = serial_manager.find_serial(AP_SerialManager::SerialProtocol_FrSky_SPort, 0))) {
         _backend = new AP_Frsky_SPort(port);
-    } else if ((port = serial_manager.find_serial(AP_SerialManager::SerialProtocol_FrSky_SPort_Passthrough, 0))) {
+    } else if (use_external_data || (port = serial_manager.find_serial(AP_SerialManager::SerialProtocol_FrSky_SPort_Passthrough, 0))) {
         _backend = new AP_Frsky_SPort_Passthrough(port, use_external_data);
     }
 

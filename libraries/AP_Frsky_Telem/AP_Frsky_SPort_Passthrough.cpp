@@ -59,6 +59,11 @@ bool AP_Frsky_SPort_Passthrough::init()
         return false;
     }
 
+    // do not initialize serial ports for external data
+    if (_use_external_data) {
+        return true;
+    }
+
     return AP_Frsky_Backend::init();
 }
 
