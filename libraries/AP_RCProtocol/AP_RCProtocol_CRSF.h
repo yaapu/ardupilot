@@ -55,8 +55,8 @@ public:
         CRSF_FRAMETYPE_PARAMETER_READ = 0x2C,
         CRSF_FRAMETYPE_PARAMETER_WRITE = 0x2D,
         CRSF_FRAMETYPE_COMMAND = 0x32,
-        // Passthrough
-        CRSF_FRAMETYPE_PASSTHROUGH = 0x80,
+        // ArduPilot reserved frame type is 0x80
+        CRSF_FRAMETYPE_ARDUPILOT = 0x80,
     };
 
     // Command IDs for CRSF_FRAMETYPE_COMMAND
@@ -116,6 +116,11 @@ public:
     // Commands for CRSF_COMMAND_RX
     enum CommandRX {
         CRSF_COMMAND_RX_BIND = 0x01,
+    };
+
+    // SubType IDs for CRSF_FRAMETYPE_ARDUPILOT
+    enum ArdupilotSubTypeID : uint8_t {
+        CRSF_ARDUPILOT_PASSTHROUGH = 0x01,
     };
 
     enum DeviceAddress {

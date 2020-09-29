@@ -30,6 +30,7 @@
 #if HAL_CRSF_TELEM_ENABLED
 
 #define CRSF_PASSTHROUGH_DEBUG 0
+
 // #define CRSF_DEBUG
 #ifdef CRSF_DEBUG
 # define debug(fmt, args...)	hal.console->printf("CRSF: " fmt "\n", ##args)
@@ -77,25 +78,27 @@ void AP_CRSF_Telem::setup_wfq_scheduler(void)
     add_scheduler_entry(1300, 500); // battery           2Hz
     add_scheduler_entry(550, 280);  // GPS               3Hz
     add_scheduler_entry(550, 500);  // flight mode       2Hz
-    add_scheduler_entry(5000, 25);  // passthrough      40Hz
+    add_scheduler_entry(5000, 25);  // passthrough       max 40Hz
 }
 
 void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
 {
     if (rc().crsf_passthrough_data()) {
         // raise passthrough
-        set_scheduler_entry(PASSTHROUGH, 25, 25);
+        set_scheduler_entry(PASSTHROUGH, 25, 25);       // 40Hz
         // lower non passthrough telemetry
-        set_scheduler_entry(ATTITUDE, 1000, 500);
-        set_scheduler_entry(BATTERY, 1250, 1000);
-        set_scheduler_entry(FLIGHT_MODE, 1000, 1000);
+        set_scheduler_entry(ATTITUDE, 1000, 1000);      // 1Hz
+        set_scheduler_entry(HEARTBEAT, 1000, 1000);     // 1Hz
+        set_scheduler_entry(BATTERY, 1000, 1000);       // 1Hz
+        set_scheduler_entry(FLIGHT_MODE, 1000, 1000);   // 1Hz
     } else {
         // lower passthrough
-        set_scheduler_entry(PASSTHROUGH, 5000, 25);
+        set_scheduler_entry(PASSTHROUGH, 5000, 25);     // disabled
         // raise non passthrough telemetry
-        set_scheduler_entry(ATTITUDE, 50, 120);
-        set_scheduler_entry(BATTERY, 1300, 500);
-        set_scheduler_entry(FLIGHT_MODE, 550, 500);
+        set_scheduler_entry(HEARTBEAT, 50, 100);        // 10Hz
+        set_scheduler_entry(ATTITUDE, 50, 120);         // 8Hz
+        set_scheduler_entry(BATTERY, 1300, 500);        // 2Hz
+        set_scheduler_entry(FLIGHT_MODE, 550, 500);     // 2Hz
     }
 }
 
@@ -245,9 +248,6 @@ void AP_CRSF_Telem::update()
 
 void AP_CRSF_Telem::update_params()
 {
-#if CRSF_PASSTHROUGH_DEBUG
-    hal.console->printf("params\n");
-#endif
     AP_VideoTX& vtx = AP::vtx();
 
     _vtx_freq_change_pending = vtx.update_band() || vtx.update_channel() || _vtx_freq_change_pending;
@@ -446,9 +446,6 @@ void AP_CRSF_Telem::calc_flight_mode()
 // get passthrough telemetry data
 void AP_CRSF_Telem::get_passthrough_telem_data()
 {
-#if CRSF_PASSTHROUGH_DEBUG
-    hal.console->printf("passthrough\n");
-#endif
     uint8_t frame;
     uint16_t appid;
     uint32_t data;
@@ -461,10 +458,11 @@ void AP_CRSF_Telem::get_passthrough_telem_data()
     for (uint8_t i=0; i<10; i++) {
         if (AP_Frsky_Telem::get_telem_data(frame, appid, data)) {
             if (appid != 0x800) {
-                _telem.bcast.passthrough.appid = appid;
-                _telem.bcast.passthrough.data = data;
+                _telem.bcast.ardupilot.passthrough.sub_type = AP_RCProtocol_CRSF::ArdupilotSubTypeID::CRSF_ARDUPILOT_PASSTHROUGH;
+                _telem.bcast.ardupilot.passthrough.appid = appid;
+                _telem.bcast.ardupilot.passthrough.data = data;
                 _telem_size = sizeof(AP_CRSF_Telem::PassthroughFrame);
-                _telem_type = AP_RCProtocol_CRSF::CRSF_FRAMETYPE_PASSTHROUGH;
+                _telem_type = AP_RCProtocol_CRSF::CRSF_FRAMETYPE_ARDUPILOT;
 
                 _telem_pending = true;
                 return;

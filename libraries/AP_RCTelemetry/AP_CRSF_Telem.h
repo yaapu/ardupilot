@@ -114,11 +114,18 @@ public:
         uint8_t origin;
     } PACKED;
 
-    // CRSF_PASSTROUGH_V1_FRAME
+    // Frame to hold passthrough telemetry
     struct PassthroughFrame {
+        AP_RCProtocol_CRSF::ArdupilotSubTypeID sub_type;
         uint16_t appid;
         uint32_t data;
     } PACKED;
+
+    // ardupilot frametype container
+    union ArdupilotFrame {
+        PassthroughFrame passthrough;
+    } PACKED;
+
 
     union BroadcastFrame {
         GPSFrame gps;
@@ -127,7 +134,7 @@ public:
         VTXFrame vtx;
         AttitudeFrame attitude;
         FlightModeFrame flightmode;
-        PassthroughFrame passthrough;
+        ArdupilotFrame ardupilot;
     } PACKED;
 
     union ExtendedFrame {
