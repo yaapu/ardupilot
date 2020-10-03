@@ -87,10 +87,10 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
         // raise passthrough
         set_scheduler_entry(PASSTHROUGH, 25, 25);       // 40Hz
         // lower non passthrough telemetry
-        set_scheduler_entry(ATTITUDE, 1000, 1000);      // 1Hz
-        set_scheduler_entry(HEARTBEAT, 1000, 1000);     // 1Hz
-        set_scheduler_entry(BATTERY, 1000, 1000);       // 1Hz
-        set_scheduler_entry(FLIGHT_MODE, 1000, 1000);   // 1Hz
+        set_scheduler_entry(BATTERY, 1000, 2000);       // 2Hz
+        set_scheduler_entry(FLIGHT_MODE, 1000, 2000);   // 2Hz
+        set_scheduler_entry(ATTITUDE, 1000, 5000);      // 1Hz
+        set_scheduler_entry(HEARTBEAT, 1000, 5000);     // 1Hz
     } else {
         // lower passthrough
         set_scheduler_entry(PASSTHROUGH, 5000, 25);     // disabled
@@ -106,6 +106,22 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
 bool AP_CRSF_Telem::is_packet_ready(uint8_t idx, bool queue_empty)
 {
     switch (idx) {
+    case BATTERY:
+    case FLIGHT_MODE:
+    case HEARTBEAT:
+    case ATTITUDE:
+        {
+            AP_RCProtocol_CRSF* crsf = AP::crsf();
+            if (crsf == nullptr) {
+                return true;
+            }
+            // check link telemetry rate
+            if (rc().crsf_passthrough_data() && crsf->get_link_status().rf_mode != AP_RCProtocol_CRSF::RFMode::CRSF_RF_MODE_150HZ) {
+                // on slow telemetry rates drop all CRSF telemetry but passthrough frames
+                return false;
+            }
+        }
+        return true;
     case PARAMETERS:
         return AP::vtx().have_params_changed() ||_vtx_power_change_pending || _vtx_freq_change_pending || _vtx_options_change_pending;
     case PASSTHROUGH:

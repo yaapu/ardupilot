@@ -168,6 +168,22 @@ public:
         int8_t downlink_dnr; // ( db )
     } PACKED;
 
+    enum RFMode : uint8_t {
+        CRSF_RF_MODE_4HZ = 0,
+        CRSF_RF_MODE_50HZ,
+        CRSF_RF_MODE_150HZ,
+    };
+
+    struct LinkStatus {
+        bool fast_telem; // is 150Hz telemetry active
+        int16_t rssi = -1;
+        uint8_t rf_mode;
+    };
+
+    const LinkStatus& get_link_status() const {
+        return _link_status;
+    }
+
 private:
     struct Frame _frame;
     struct Frame _telemetry_frame;
@@ -194,8 +210,8 @@ private:
     uint32_t _last_rx_time_us;
     uint32_t _start_frame_time_us;
     bool telem_available;
-    bool _fast_telem; // is 150Hz telemetry active
-    int16_t _current_rssi = -1;
+    
+    struct LinkStatus _link_status;
 
     AP_HAL::UARTDriver *_uart;
 
