@@ -172,6 +172,7 @@ private:
         GPS,
         FLIGHT_MODE,
         PASSTHROUGH,
+        STATUS_TEXT,
         NUM_SENSORS
     };
 

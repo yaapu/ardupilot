@@ -76,14 +76,16 @@ void AP_CRSF_Telem::setup_wfq_scheduler(void)
     add_scheduler_entry(1300, 500); // battery           2Hz
     add_scheduler_entry(550, 280);  // GPS               3Hz
     add_scheduler_entry(550, 500);  // flight mode       2Hz
-    add_scheduler_entry(5000, 25);  // passthrough       max 40Hz
+    add_scheduler_entry(5000, 50);  // passthrough       max 20Hz
+    add_scheduler_entry(5000, 50);  // status text       max 20Hz
 }
 
 void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
 {
-    if (rc().crsf_passthrough_data()) {
+    if (rc().crsf_custom_telemetry()) {
         // raise passthrough
-        set_scheduler_entry(PASSTHROUGH, 25, 25);       // 40Hz
+        set_scheduler_entry(PASSTHROUGH, 50, 50);       // 20Hz
+        set_scheduler_entry(STATUS_TEXT, 50, 50);       // 20Hz
         // lower non passthrough telemetry
         set_scheduler_entry(BATTERY, 1000, 2000);       // 2Hz
         set_scheduler_entry(FLIGHT_MODE, 1000, 2000);   // 2Hz
@@ -91,7 +93,8 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
         set_scheduler_entry(HEARTBEAT, 1000, 5000);     // 1Hz
     } else {
         // lower passthrough
-        set_scheduler_entry(PASSTHROUGH, 5000, 25);     // disabled
+        set_scheduler_entry(PASSTHROUGH, 5000, 5000);     // disabled
+        set_scheduler_entry(STATUS_TEXT, 5000, 5000);     // disabled
         // raise non passthrough telemetry
         set_scheduler_entry(HEARTBEAT, 50, 100);        // 10Hz
         set_scheduler_entry(ATTITUDE, 50, 120);         // 8Hz
@@ -114,7 +117,7 @@ bool AP_CRSF_Telem::is_packet_ready(uint8_t idx, bool queue_empty)
                 return true;
             }
             // check link telemetry rate
-            if (rc().crsf_passthrough_data() && crsf->get_link_status().rf_mode != AP_RCProtocol_CRSF::RFMode::CRSF_RF_MODE_150HZ) {
+            if (rc().crsf_custom_telemetry() && crsf->get_link_status().rf_mode != AP_RCProtocol_CRSF::RFMode::CRSF_RF_MODE_150HZ) {
                 // on slow telemetry rates drop all CRSF telemetry but passthrough frames
                 return false;
             }
@@ -123,7 +126,9 @@ bool AP_CRSF_Telem::is_packet_ready(uint8_t idx, bool queue_empty)
     case PARAMETERS:
         return AP::vtx().have_params_changed() ||_vtx_power_change_pending || _vtx_freq_change_pending || _vtx_options_change_pending;
     case PASSTHROUGH:
-        return rc().crsf_passthrough_data();
+        return rc().crsf_custom_telemetry();
+    case STATUS_TEXT:
+        return rc().crsf_custom_telemetry() && _statustext.available;
     default:
         return _enable_telemetry;
     }
@@ -154,6 +159,9 @@ void AP_CRSF_Telem::process_packet(uint8_t idx)
             break;
         case PASSTHROUGH:
             get_passthrough_telem_data();
+            break;
+        case STATUS_TEXT:
+            calc_status_text();
             break;
         default:
             break;

@@ -395,8 +395,8 @@ public:
     }
 
     // should we use passthrough data forr crsf telemetry
-    bool crsf_passthrough_data(void) const {
-        return get_singleton() != nullptr && (_options & uint32_t(Option::CRSF_PASSTHROUGH_DATA));
+    bool crsf_custom_telemetry(void) const {
+        return get_singleton() != nullptr && (_options & uint32_t(Option::CRSF_CUSTOM_TELEMETRY));
     }
 
     // should a channel reverse option affect aux switches
@@ -454,7 +454,7 @@ protected:
         ARMING_CHECK_THROTTLE   = (1 << 5), // run an arming check for neutral throttle
         ARMING_SKIP_CHECK_RPY   = (1 << 6), // skip the an arming checks for the roll/pitch/yaw channels
         ALLOW_SWITCH_REV        = (1 << 7), // honor the reversed flag on switches
-        CRSF_PASSTHROUGH_DATA   = (1 << 8), // use passthrough data for crsf telemetry
+        CRSF_CUSTOM_TELEMETRY   = (1 << 8), // use passthrough data for crsf telemetry
     };
 
     void new_override_received() {
