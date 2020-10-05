@@ -83,19 +83,19 @@ void AP_CRSF_Telem::setup_wfq_scheduler(void)
 void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
 {
     if (rc().crsf_custom_telemetry()) {
-        // raise passthrough
+        // raise custom telemetry priority
         set_scheduler_entry(PASSTHROUGH, 50, 50);       // 20Hz
         set_scheduler_entry(STATUS_TEXT, 50, 50);       // 20Hz
-        // lower non passthrough telemetry
+        // lower CRSF priority
         set_scheduler_entry(BATTERY, 1000, 2000);       // 2Hz
         set_scheduler_entry(FLIGHT_MODE, 1000, 2000);   // 2Hz
         set_scheduler_entry(ATTITUDE, 1000, 5000);      // 1Hz
         set_scheduler_entry(HEARTBEAT, 1000, 5000);     // 1Hz
     } else {
-        // lower passthrough
-        set_scheduler_entry(PASSTHROUGH, 5000, 5000);     // disabled
-        set_scheduler_entry(STATUS_TEXT, 5000, 5000);     // disabled
-        // raise non passthrough telemetry
+        // lower custom telemetry priority
+        set_scheduler_entry(PASSTHROUGH, 5000, 50);     
+        set_scheduler_entry(STATUS_TEXT, 5000, 50);     
+        // raise CRSF priority
         set_scheduler_entry(HEARTBEAT, 50, 100);        // 10Hz
         set_scheduler_entry(ATTITUDE, 50, 120);         // 8Hz
         set_scheduler_entry(BATTERY, 1300, 500);        // 2Hz
@@ -128,7 +128,7 @@ bool AP_CRSF_Telem::is_packet_ready(uint8_t idx, bool queue_empty)
     case PASSTHROUGH:
         return rc().crsf_custom_telemetry();
     case STATUS_TEXT:
-        return rc().crsf_custom_telemetry() && _statustext.available;
+        return rc().crsf_custom_telemetry() && !queue_empty;
     default:
         return _enable_telemetry;
     }
