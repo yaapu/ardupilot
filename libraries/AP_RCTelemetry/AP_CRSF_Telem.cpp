@@ -455,13 +455,14 @@ void AP_CRSF_Telem::calc_status_text()
         }
         _statustext.available = true;
     }
-    _telem.bcast.ardupilot.status_text.sub_type = AP_RCProtocol_CRSF::ArdupilotSubTypeID::CRSF_ARDUPILOT_STATUS_TEXT;
-    uint8_t len = hal.util->snprintf(_telem.bcast.ardupilot.status_text.text, 50, "%s", _statustext.next.text);
-    _telem.bcast.ardupilot.status_text.severity = _statustext.next.severity;
-    _statustext.available = false;
+
     _telem_type = AP_RCProtocol_CRSF::CRSF_FRAMETYPE_ARDUPILOT;
+    _telem.bcast.ardupilot.status_text.sub_type = AP_RCProtocol_CRSF::ArdupilotSubTypeID::CRSF_ARDUPILOT_STATUS_TEXT;
+    _telem.bcast.ardupilot.status_text.severity = _statustext.next.severity;
+    const uint8_t len = hal.util->snprintf(_telem.bcast.ardupilot.status_text.text, 50, "%s", _statustext.next.text);
     _telem_size = len + 2; // sub_type + severity + text
     _telem_pending = true;
+    _statustext.available = false;
 }
 
 // get passthrough telemetry data
@@ -474,11 +475,11 @@ void AP_CRSF_Telem::get_passthrough_telem_data()
     _telem_pending = false;
     /*
      we want to fill all CRSF slots so we call get_telem_data() multiple times (no more than 10)
-     until we get valid data. We are not interested in GPS so we discard that as well
+     until we get valid data. We are not interested in GPS and status text messages so we discard both
      */
     for (uint8_t i=0; i<10; i++) {
         if (AP_Frsky_Telem::get_telem_data(frame, appid, data)) {
-            if (appid != 0x800) {
+            if (appid != 0x800 && appid != 0x500) {
                 _telem.bcast.ardupilot.passthrough.sub_type = AP_RCProtocol_CRSF::ArdupilotSubTypeID::CRSF_ARDUPILOT_PASSTHROUGH;
                 _telem.bcast.ardupilot.passthrough.appid = appid;
                 _telem.bcast.ardupilot.passthrough.data = data;
