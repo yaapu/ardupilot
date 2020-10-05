@@ -29,6 +29,7 @@
 
 #if HAL_CRSF_TELEM_ENABLED
 
+#define DEBUG_CRSF_CUSTOM_TELEM 1
 // #define CRSF_DEBUG
 #ifdef CRSF_DEBUG
 # define debug(fmt, args...)	hal.console->printf("CRSF: " fmt "\n", ##args)
@@ -77,7 +78,7 @@ void AP_CRSF_Telem::setup_wfq_scheduler(void)
     add_scheduler_entry(550, 280);  // GPS               3Hz
     add_scheduler_entry(550, 500);  // flight mode       2Hz
     add_scheduler_entry(5000, 50);  // passthrough       max 20Hz
-    add_scheduler_entry(5000, 50);  // status text       max 20Hz
+    add_scheduler_entry(5000, 750); // status text       max 1.25Hz
 }
 
 void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
@@ -85,7 +86,7 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
     if (rc().crsf_custom_telemetry()) {
         // raise custom telemetry priority
         set_scheduler_entry(PASSTHROUGH, 50, 50);       // 20Hz
-        set_scheduler_entry(STATUS_TEXT, 50, 50);       // 20Hz
+        set_scheduler_entry(STATUS_TEXT, 100, 750);     // 1.25Hz
         // lower CRSF priority
         set_scheduler_entry(BATTERY, 1000, 2000);       // 2Hz
         set_scheduler_entry(FLIGHT_MODE, 1000, 2000);   // 2Hz
@@ -94,7 +95,7 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
     } else {
         // lower custom telemetry priority
         set_scheduler_entry(PASSTHROUGH, 5000, 50);     
-        set_scheduler_entry(STATUS_TEXT, 5000, 50);     
+        set_scheduler_entry(STATUS_TEXT, 5000, 500);     
         // raise CRSF priority
         set_scheduler_entry(HEARTBEAT, 50, 100);        // 10Hz
         set_scheduler_entry(ATTITUDE, 50, 120);         // 8Hz
@@ -482,18 +483,17 @@ void AP_CRSF_Telem::get_passthrough_telem_data()
 
     _telem_pending = false;
     /*
-     we want to fill all CRSF slots so we call get_telem_data() multiple times (no more than 10)
-     until we get valid data. We are not interested in GPS and status text messages so we discard both
+     To fill all CRSF slots we call get_telem_data() multiple times (no more than 10) until we get valid data.
+     We are not interested in GPS 0x800 and status text messages 0x5000
      */
     for (uint8_t i=0; i<10; i++) {
         if (AP_Frsky_Telem::get_telem_data(frame, appid, data)) {
-            if (appid != 0x800 && appid != 0x500) {
+            if (appid != 0x800 && appid != 0x5000) {
                 _telem.bcast.ardupilot.passthrough.sub_type = AP_RCProtocol_CRSF::ArdupilotSubTypeID::CRSF_ARDUPILOT_PASSTHROUGH;
                 _telem.bcast.ardupilot.passthrough.appid = appid;
                 _telem.bcast.ardupilot.passthrough.data = data;
                 _telem_size = sizeof(AP_CRSF_Telem::PassthroughFrame);
                 _telem_type = AP_RCProtocol_CRSF::CRSF_FRAMETYPE_ARDUPILOT;
-
                 _telem_pending = true;
                 return;
             }

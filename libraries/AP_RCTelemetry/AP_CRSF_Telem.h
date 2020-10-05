@@ -116,14 +116,14 @@ public:
 
     // Frame to hold passthrough telemetry
     struct PassthroughFrame {
-        AP_RCProtocol_CRSF::ArdupilotSubTypeID sub_type;
+        uint8_t sub_type;
         uint16_t appid;
         uint32_t data;
     } PACKED;
 
     // Frame to hold status text message
     struct StatusTextFrame {
-        AP_RCProtocol_CRSF::ArdupilotSubTypeID sub_type;
+        uint8_t sub_type;
         uint8_t severity;
         char text[50];  // ( Null-terminated string )
     } PACKED;
@@ -204,7 +204,7 @@ private:
     TelemetryPayload _telem;
     uint8_t _telem_size;
     uint8_t _telem_type;
-
+    
     bool _telem_pending;
     bool _enable_telemetry;
 
