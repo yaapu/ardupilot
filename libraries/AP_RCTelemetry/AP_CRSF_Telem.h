@@ -121,9 +121,17 @@ public:
         uint32_t data;
     } PACKED;
 
+    // Frame to hold status text message
+    struct StatusTextFrame {
+        AP_RCProtocol_CRSF::ArdupilotSubTypeID sub_type;
+        uint8_t severity;
+        char text[50];  // ( Null-terminated string )
+    } PACKED;
+
     // ardupilot frametype container
     union ArdupilotFrame {
         PassthroughFrame passthrough;
+        StatusTextFrame status_text;
     } PACKED;
 
 
@@ -180,6 +188,7 @@ private:
     void calc_flight_mode();
     void update_params();
     void get_passthrough_telem_data();
+    void calc_status_text();
 
     void process_vtx_frame(VTXFrame* vtx);
     void process_vtx_telem_frame(VTXTelemetryFrame* vtx);

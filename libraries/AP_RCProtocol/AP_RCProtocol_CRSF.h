@@ -121,6 +121,7 @@ public:
     // SubType IDs for CRSF_FRAMETYPE_ARDUPILOT
     enum ArdupilotSubTypeID : uint8_t {
         CRSF_ARDUPILOT_PASSTHROUGH = 0x01,
+        CRSF_ARDUPILOT_STATUS_TEXT = 0x02,
     };
 
     enum DeviceAddress {
@@ -175,12 +176,11 @@ public:
     };
 
     struct LinkStatus {
-        bool fast_telem; // is 150Hz telemetry active
         int16_t rssi = -1;
         uint8_t rf_mode;
-    };
+    } PACKED;
 
-    const LinkStatus& get_link_status() const {
+    const volatile LinkStatus& get_link_status() const {
         return _link_status;
     }
 
@@ -211,7 +211,7 @@ private:
     uint32_t _start_frame_time_us;
     bool telem_available;
     
-    struct LinkStatus _link_status;
+    volatile struct LinkStatus _link_status;
 
     AP_HAL::UARTDriver *_uart;
 

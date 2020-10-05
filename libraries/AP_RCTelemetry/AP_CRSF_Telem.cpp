@@ -29,8 +29,6 @@
 
 #if HAL_CRSF_TELEM_ENABLED
 
-#define CRSF_PASSTHROUGH_DEBUG 0
-
 // #define CRSF_DEBUG
 #ifdef CRSF_DEBUG
 # define debug(fmt, args...)	hal.console->printf("CRSF: " fmt "\n", ##args)
@@ -370,9 +368,6 @@ void AP_CRSF_Telem::calc_heartbeat()
 // prepare battery data
 void AP_CRSF_Telem::calc_battery()
 {
-#if CRSF_PASSTHROUGH_DEBUG
-    hal.console->printf("batt\n");
-#endif
     const AP_BattMonitor &_battery = AP::battery();
 
     _telem.bcast.battery.voltage = htobe16(uint16_t(roundf(_battery.voltage(0) * 10.0f)));
@@ -404,9 +399,6 @@ void AP_CRSF_Telem::calc_battery()
 // prepare gps data
 void AP_CRSF_Telem::calc_gps()
 {
-#if CRSF_PASSTHROUGH_DEBUG
-    hal.console->printf("gps\n");
-#endif
     const Location &loc = AP::gps().location(0); // use the first gps instance (same as in send_mavlink_gps_raw)
 
     _telem.bcast.gps.latitude = htobe32(loc.lat);
@@ -425,9 +417,6 @@ void AP_CRSF_Telem::calc_gps()
 // prepare attitude data
 void AP_CRSF_Telem::calc_attitude()
 {
-#if CRSF_PASSTHROUGH_DEBUG
-    hal.console->printf("atti\n");
-#endif
     AP_AHRS &_ahrs = AP::ahrs();
     WITH_SEMAPHORE(_ahrs.get_semaphore());
 
@@ -446,9 +435,6 @@ void AP_CRSF_Telem::calc_attitude()
 // prepare flight mode data
 void AP_CRSF_Telem::calc_flight_mode()
 {
-#if CRSF_PASSTHROUGH_DEBUG
-    hal.console->printf("fmode\n");
-#endif
     AP_Notify * notify = AP_Notify::get_singleton();
     if (notify) {
         hal.util->snprintf(_telem.bcast.flightmode.flight_mode, 16, "%s", notify->get_flight_mode_str());
@@ -457,6 +443,25 @@ void AP_CRSF_Telem::calc_flight_mode()
         _telem_type = AP_RCProtocol_CRSF::CRSF_FRAMETYPE_FLIGHT_MODE;
         _telem_pending = true;
     }
+}
+
+// prepare flight mode data
+void AP_CRSF_Telem::calc_status_text()
+{
+    if (!_statustext.available) {
+        WITH_SEMAPHORE(_statustext.sem);
+        if (!_statustext.queue.pop(_statustext.next)) {
+            return;
+        }
+        _statustext.available = true;
+    }
+    _telem.bcast.ardupilot.status_text.sub_type = AP_RCProtocol_CRSF::ArdupilotSubTypeID::CRSF_ARDUPILOT_STATUS_TEXT;
+    uint8_t len = hal.util->snprintf(_telem.bcast.ardupilot.status_text.text, 50, "%s", _statustext.next.text);
+    _telem.bcast.ardupilot.status_text.severity = _statustext.next.severity;
+    _statustext.available = false;
+    _telem_type = AP_RCProtocol_CRSF::CRSF_FRAMETYPE_ARDUPILOT;
+    _telem_size = len + 2; // sub_type + severity + text
+    _telem_pending = true;
 }
 
 // get passthrough telemetry data

@@ -184,12 +184,6 @@ void AP_RCProtocol_CRSF::_process_byte(uint32_t timestamp_us, uint8_t byte)
     if (_frame_ofs == _frame.length + CSRF_HEADER_LEN) {
         log_data(AP_RCProtocol::CRSF, timestamp_us, (const uint8_t*)&_frame, _frame_ofs - CSRF_HEADER_LEN);
 
-        if ((timestamp_us - _last_frame_time_us) <= CRSF_INTER_FRAME_TIME_US_150HZ + CRSF_MAX_FRAME_TIME_US) {
-            _link_status.fast_telem = true;
-        } else {
-            _link_status.fast_telem = false;
-        }
-
         // we consumed the partial frame, reset
         _frame_ofs = 0;
 
