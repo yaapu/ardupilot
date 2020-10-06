@@ -77,7 +77,7 @@ void AP_CRSF_Telem::setup_wfq_scheduler(void)
     add_scheduler_entry(1300, 500); // battery           2Hz
     add_scheduler_entry(550, 280);  // GPS               3Hz
     add_scheduler_entry(550, 500);  // flight mode       2Hz
-    add_scheduler_entry(5000, 50);  // passthrough       max 20Hz
+    add_scheduler_entry(5000, 33);  // passthrough       max 30Hz
     add_scheduler_entry(5000, 500); // status text       max 2Hz
 }
 
@@ -85,7 +85,7 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
 {
     if (rc().crsf_custom_telemetry()) {
         // raise custom telemetry priority
-        set_scheduler_entry(PASSTHROUGH, 50, 50);       // 20Hz
+        set_scheduler_entry(PASSTHROUGH, 50, 33);       // 30Hz
         set_scheduler_entry(STATUS_TEXT, 100, 500);     // 2Hz
         // lower CRSF priority
         set_scheduler_entry(BATTERY, 1000, 2000);       // 2Hz
@@ -94,7 +94,7 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
         set_scheduler_entry(HEARTBEAT, 1000, 5000);     // 1Hz
     } else {
         // lower custom telemetry priority
-        set_scheduler_entry(PASSTHROUGH, 5000, 50);     
+        set_scheduler_entry(PASSTHROUGH, 5000, 33);     
         set_scheduler_entry(STATUS_TEXT, 5000, 500);     
         // raise CRSF priority
         set_scheduler_entry(HEARTBEAT, 50, 100);        // 10Hz
