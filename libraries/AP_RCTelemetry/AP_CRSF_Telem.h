@@ -114,6 +114,27 @@ public:
         uint8_t origin;
     } PACKED;
 
+    // Frame to hold passthrough telemetry
+    struct PassthroughFrame {
+        uint8_t sub_type;
+        uint16_t appid;
+        uint32_t data;
+    } PACKED;
+
+    // Frame to hold status text message
+    struct StatusTextFrame {
+        uint8_t sub_type;
+        uint8_t severity;
+        char text[50];  // ( Null-terminated string )
+    } PACKED;
+
+    // ardupilot frametype container
+    union ArdupilotFrame {
+        PassthroughFrame passthrough;
+        StatusTextFrame status_text;
+    } PACKED;
+
+
     union BroadcastFrame {
         GPSFrame gps;
         HeartbeatFrame heartbeat;
@@ -121,6 +142,7 @@ public:
         VTXFrame vtx;
         AttitudeFrame attitude;
         FlightModeFrame flightmode;
+        ArdupilotFrame ardupilot;
     } PACKED;
 
     union ExtendedFrame {
@@ -149,6 +171,8 @@ private:
         BATTERY,
         GPS,
         FLIGHT_MODE,
+        PASSTHROUGH,
+        STATUS_TEXT,
         NUM_SENSORS
     };
 
@@ -164,6 +188,8 @@ private:
     void calc_attitude();
     void calc_flight_mode();
     void update_params();
+    void get_passthrough_telem_data();
+    void calc_status_text();
 
     void process_vtx_frame(VTXFrame* vtx);
     void process_vtx_telem_frame(VTXTelemetryFrame* vtx);
@@ -178,7 +204,7 @@ private:
     TelemetryPayload _telem;
     uint8_t _telem_size;
     uint8_t _telem_type;
-
+    
     bool _telem_pending;
     bool _enable_telemetry;
 
