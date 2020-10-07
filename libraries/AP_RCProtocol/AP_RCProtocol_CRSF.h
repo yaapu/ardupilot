@@ -55,6 +55,8 @@ public:
         CRSF_FRAMETYPE_PARAMETER_READ = 0x2C,
         CRSF_FRAMETYPE_PARAMETER_WRITE = 0x2D,
         CRSF_FRAMETYPE_COMMAND = 0x32,
+        // ArduPilot reserved frame type is 0x80
+        CRSF_FRAMETYPE_ARDUPILOT = 0x80,
     };
 
     // Command IDs for CRSF_FRAMETYPE_COMMAND
@@ -116,6 +118,12 @@ public:
         CRSF_COMMAND_RX_BIND = 0x01,
     };
 
+    // SubType IDs for CRSF_FRAMETYPE_ARDUPILOT
+    enum ArdupilotSubTypeID : uint8_t {
+        CRSF_ARDUPILOT_PASSTHROUGH = 0x01,
+        CRSF_ARDUPILOT_STATUS_TEXT = 0x02,
+    };
+
     enum DeviceAddress {
         CRSF_ADDRESS_BROADCAST = 0x00,
         CRSF_ADDRESS_USB = 0x10,
@@ -161,6 +169,21 @@ public:
         int8_t downlink_dnr; // ( db )
     } PACKED;
 
+    enum RFMode : uint8_t {
+        CRSF_RF_MODE_4HZ = 0,
+        CRSF_RF_MODE_50HZ,
+        CRSF_RF_MODE_150HZ,
+    };
+
+    struct LinkStatus {
+        int16_t rssi = -1;
+        uint8_t rf_mode;
+    } PACKED;
+
+    const volatile LinkStatus& get_link_status() const {
+        return _link_status;
+    }
+
 private:
     struct Frame _frame;
     struct Frame _telemetry_frame;
@@ -187,8 +210,8 @@ private:
     uint32_t _last_rx_time_us;
     uint32_t _start_frame_time_us;
     bool telem_available;
-    bool _fast_telem; // is 150Hz telemetry active
-    int16_t _current_rssi = -1;
+    
+    volatile struct LinkStatus _link_status;
 
     AP_HAL::UARTDriver *_uart;
 
