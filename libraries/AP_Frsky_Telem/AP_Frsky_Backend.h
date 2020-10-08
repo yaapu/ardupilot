@@ -27,6 +27,14 @@ public:
         return false;
     }
 
+    virtual void set_scheduler_entry_min_period(uint8_t slot, uint32_t min_period_ms) {
+        return;
+    }
+
+    virtual void reset_scheduler_entry_min_periods() {
+        return;
+    }
+
     virtual void queue_text_message(MAV_SEVERITY severity, const char *text) { }
 
 protected:

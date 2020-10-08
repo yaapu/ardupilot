@@ -35,20 +35,9 @@ public:
         AP_RCTelemetry::queue_message(severity, text);
     }
 
-
-protected:
-
-    void send() override;
-
-private:
-
-    enum PassthroughParam : uint8_t {
-        FRAME_TYPE =          1,
-        BATT_FS_VOLTAGE =     2,
-        BATT_FS_CAPACITY =    3,
-        BATT_CAPACITY_1 =     4,
-        BATT_CAPACITY_2 =     5
-    };
+    void reset_scheduler_entry_min_periods() override {
+        setup_wfq_scheduler();
+    }
 
     enum PassthroughPacketType : uint8_t {
         TEXT =          0,  // 0x5000 status text (dynamic)
@@ -62,6 +51,20 @@ private:
         BATT_2 =        8,  // 0x5008 Battery 2 status
         BATT_1 =        9,  // 0x5008 Battery 1 status
         PARAM =         10  // 0x5007 parameters
+    };
+
+protected:
+
+    void send() override;
+
+private:
+
+    enum PassthroughParam : uint8_t {
+        FRAME_TYPE =          1,
+        BATT_FS_VOLTAGE =     2,
+        BATT_FS_CAPACITY =    3,
+        BATT_CAPACITY_1 =     4,
+        BATT_CAPACITY_2 =     5
     };
 
     // methods to convert flight controller data to FrSky SPort Passthrough (OpenTX) format
