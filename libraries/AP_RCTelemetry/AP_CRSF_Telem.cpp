@@ -505,7 +505,7 @@ void AP_CRSF_Telem::calc_status_text()
                     break;
                 }
 #if DEBUG_CRSF_CUSTOM_TELEM
-                hal.console->printf("CRSF: status text msg discarded, severity=%d", _statustext.next.severity);
+                hal.console->printf("CRSF: status text msg discarded, severity=%d\n", _statustext.next.severity);
 #endif
             }
             if (!got_message) {
