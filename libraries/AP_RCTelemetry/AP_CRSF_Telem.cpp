@@ -144,6 +144,7 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
 #if DEBUG_CRSF_CUSTOM_TELEM
             hal.console->printf("rf mode:%d -> %d\n", _telem_last_rf_mode, crsf->get_link_status().rf_mode);
 #endif
+            gcs().send_text(MAV_SEVERITY_INFO, "Crossfire rf mode change detected, rf_mode=%d", crsf->get_link_status().rf_mode);
             update_custom_telemetry_rates(_telem_last_rf_mode);
             _telem_last_rf_mode = crsf->get_link_status().rf_mode;
         }
@@ -505,8 +506,23 @@ void AP_CRSF_Telem::calc_status_text()
 {
     if (!_statustext.available) {
         WITH_SEMAPHORE(_statustext.sem);
-        if (!_statustext.queue.pop(_statustext.next)) {
-            return;
+        // check link speed
+        if (_telem_last_rf_mode != AP_RCProtocol_CRSF::CRSF_RF_MODE_150HZ) {
+            // drop all non warning/error/critical status text messages
+            bool got_message = false;
+            while (_statustext.queue.pop(_statustext.next)) {
+                if (_statustext.next.severity <= MAV_SEVERITY_WARNING) {
+                    got_message = true;
+                    break;
+                }
+            }
+            if (!got_message) {
+                return;
+            }
+        } else {
+            if (!_statustext.queue.pop(_statustext.next)) {
+                return;
+            }
         }
         _statustext.available = true;
     }
