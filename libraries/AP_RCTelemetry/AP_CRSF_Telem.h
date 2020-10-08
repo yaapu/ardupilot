@@ -180,7 +180,9 @@ private:
     bool is_packet_ready(uint8_t idx, bool queue_empty) override;
     void process_packet(uint8_t idx) override;
     void adjust_packet_weight(bool queue_empty) override;
-
+    void setup_custom_telemetry();
+    void update_custom_telemetry_rates(uint8_t rf_mode);
+    
     void calc_parameter_ping();
     void calc_heartbeat();
     void calc_battery();
@@ -204,6 +206,7 @@ private:
     TelemetryPayload _telem;
     uint8_t _telem_size;
     uint8_t _telem_type;
+    uint8_t _telem_last_rf_mode;
     
     bool _telem_pending;
     bool _enable_telemetry;

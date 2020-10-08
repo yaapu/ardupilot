@@ -24,6 +24,7 @@
 #include <AP_SerialManager/AP_SerialManager.h>
 #include <AP_AHRS/AP_AHRS.h>
 #include <AP_Notify/AP_Notify.h>
+#include <AP_Frsky_Telem/AP_Frsky_SPort_Passthrough.h>
 #include <math.h>
 #include <stdio.h>
 
@@ -66,6 +67,9 @@ bool AP_CRSF_Telem::init(void)
  */
 void AP_CRSF_Telem::setup_wfq_scheduler(void)
 {
+#if DEBUG_CRSF_CUSTOM_TELEM
+    hal.console->printf("setup_wfq_scheduler()\n");
+#endif
     // initialize packet weights for the WFQ scheduler
     // priority[i] = 1/_scheduler.packet_weight[i]
     // rate[i] = LinkRate * ( priority[i] / (sum(priority[1-n])) )
@@ -79,28 +83,70 @@ void AP_CRSF_Telem::setup_wfq_scheduler(void)
     add_scheduler_entry(550, 500);  // flight mode       2Hz
     add_scheduler_entry(5000, 33);  // passthrough       max 30Hz
     add_scheduler_entry(5000, 500); // status text       max 2Hz
+
+    // setup custom telemetry
+    if (rc().crsf_custom_telemetry()) {
+        setup_custom_telemetry();
+    }
+}
+
+void AP_CRSF_Telem::setup_custom_telemetry() {
+#if DEBUG_CRSF_CUSTOM_TELEM
+    hal.console->printf("setup_custom_telem()\n");
+#endif
+    set_scheduler_entry(BATTERY, 1000, 2000);       // 0.5Hz
+    set_scheduler_entry(FLIGHT_MODE, 1000, 2000);   // 0.5Hz
+    set_scheduler_entry(ATTITUDE, 2000, 5000);      // 0.2Hz
+    set_scheduler_entry(HEARTBEAT, 2000, 5000);     // 0.2Hz
+    
+    AP_RCProtocol_CRSF* crsf = AP::crsf();
+    if (crsf == nullptr) {
+        return;
+    }
+    
+    update_custom_telemetry_rates(crsf->get_link_status().rf_mode);
+}
+
+void AP_CRSF_Telem::update_custom_telemetry_rates(uint8_t rf_mode) {
+    AP_Frsky_Telem* frsky = AP::frsky_telem();
+    if (frsky == nullptr) {
+        return;
+    }
+    // check link telemetry rate
+    if (rf_mode == AP_RCProtocol_CRSF::RFMode::CRSF_RF_MODE_150HZ) {
+        // custom telemetry for high data rates
+        set_scheduler_entry(PASSTHROUGH, 50, 33);       // 30Hz
+        set_scheduler_entry(STATUS_TEXT, 100, 500);     // 2Hz
+        // reset passthrough rates
+        frsky->reset_scheduler_entry_min_periods();
+    } else {
+        // custom telemetry for low data rates
+        set_scheduler_entry(PASSTHROUGH, 50, 100);       // 10Hz
+        set_scheduler_entry(STATUS_TEXT, 100, 2000);     // 0.5Hz
+        // low frsky attitude rate
+        frsky->set_scheduler_entry_min_period(AP_Frsky_SPort_Passthrough::ATTITUDE, 1000); // 1Hz
+    }
+    // low rates for frames we are not interested in, if we ever get one of these we will discard them
+    frsky->set_scheduler_entry_min_period(AP_Frsky_SPort_Passthrough::GPS_LAT, 10000);  // 0.1Hz
+    frsky->set_scheduler_entry_min_period(AP_Frsky_SPort_Passthrough::GPS_LON, 10000);  // 0.1Hz
+    frsky->set_scheduler_entry_min_period(AP_Frsky_SPort_Passthrough::TEXT, 10000);     // 0.1Hz
 }
 
 void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
 {
     if (rc().crsf_custom_telemetry()) {
-        // raise custom telemetry priority
-        set_scheduler_entry(PASSTHROUGH, 50, 33);       // 30Hz
-        set_scheduler_entry(STATUS_TEXT, 100, 500);     // 2Hz
-        // lower CRSF priority
-        set_scheduler_entry(BATTERY, 1000, 2000);       // 2Hz
-        set_scheduler_entry(FLIGHT_MODE, 1000, 2000);   // 2Hz
-        set_scheduler_entry(ATTITUDE, 1000, 5000);      // 1Hz
-        set_scheduler_entry(HEARTBEAT, 1000, 5000);     // 1Hz
-    } else {
-        // lower custom telemetry priority
-        set_scheduler_entry(PASSTHROUGH, 5000, 33);     
-        set_scheduler_entry(STATUS_TEXT, 5000, 500);     
-        // raise CRSF priority
-        set_scheduler_entry(HEARTBEAT, 50, 100);        // 10Hz
-        set_scheduler_entry(ATTITUDE, 50, 120);         // 8Hz
-        set_scheduler_entry(BATTERY, 1300, 500);        // 2Hz
-        set_scheduler_entry(FLIGHT_MODE, 550, 500);     // 2Hz
+        AP_RCProtocol_CRSF* crsf = AP::crsf();
+        if (crsf == nullptr) {
+            return;
+        }
+        // detect rf mode changes
+        if ( _telem_last_rf_mode != crsf->get_link_status().rf_mode) {
+#if DEBUG_CRSF_CUSTOM_TELEM
+            hal.console->printf("rf mode:%d -> %d\n", _telem_last_rf_mode, crsf->get_link_status().rf_mode);
+#endif
+            update_custom_telemetry_rates(_telem_last_rf_mode);
+            _telem_last_rf_mode = crsf->get_link_status().rf_mode;
+        }
     }
 }
 
