@@ -30,7 +30,7 @@
 
 #if HAL_CRSF_TELEM_ENABLED
 
-#define DEBUG_CRSF_CUSTOM_TELEM 1
+#define DEBUG_CRSF_CUSTOM_TELEM 0
 // #define CRSF_DEBUG
 #ifdef CRSF_DEBUG
 # define debug(fmt, args...)	hal.console->printf("CRSF: " fmt "\n", ##args)
@@ -67,9 +67,6 @@ bool AP_CRSF_Telem::init(void)
  */
 void AP_CRSF_Telem::setup_wfq_scheduler(void)
 {
-#if DEBUG_CRSF_CUSTOM_TELEM
-    gcs().send_text(MAV_SEVERITY_DEBUG, "setup_wfq_scheduler()\n");
-#endif
     // initialize packet weights for the WFQ scheduler
     // priority[i] = 1/_scheduler.packet_weight[i]
     // rate[i] = LinkRate * ( priority[i] / (sum(priority[1-n])) )
@@ -91,9 +88,6 @@ void AP_CRSF_Telem::setup_wfq_scheduler(void)
 }
 
 void AP_CRSF_Telem::setup_custom_telemetry() {
-#if DEBUG_CRSF_CUSTOM_TELEM
-    gcs().send_text(MAV_SEVERITY_DEBUG, "setup_custom_telem()\n");
-#endif
     set_scheduler_entry(BATTERY, 1000, 2000);       // 0.5Hz
     set_scheduler_entry(FLIGHT_MODE, 1000, 2000);   // 0.5Hz
     set_scheduler_entry(ATTITUDE, 2000, 5000);      // 0.2Hz
@@ -108,9 +102,6 @@ void AP_CRSF_Telem::setup_custom_telemetry() {
 }
 
 void AP_CRSF_Telem::update_custom_telemetry_rates(uint8_t rf_mode) {
-#if DEBUG_CRSF_CUSTOM_TELEM
-    gcs().send_text(MAV_SEVERITY_DEBUG, "update_custom_telemetry_rates()\n");
-#endif
     AP_Frsky_Telem* frsky = AP::frsky_telem();
     if (frsky == nullptr) {
         return;
@@ -118,16 +109,18 @@ void AP_CRSF_Telem::update_custom_telemetry_rates(uint8_t rf_mode) {
     // check link telemetry rate
     if (rf_mode == AP_RCProtocol_CRSF::RFMode::CRSF_RF_MODE_150HZ) {
         // custom telemetry for high data rates
+        set_scheduler_entry(GPS, 550, 280);             // 3Hz
         set_scheduler_entry(PASSTHROUGH, 50, 33);       // 30Hz
         set_scheduler_entry(STATUS_TEXT, 100, 500);     // 2Hz
         // reset passthrough rates
         frsky->reset_scheduler_entry_min_periods();
     } else {
         // custom telemetry for low data rates
-        set_scheduler_entry(PASSTHROUGH, 50, 100);       // 10Hz
+        set_scheduler_entry(GPS, 550, 2000);             // 0.5Hz
+        set_scheduler_entry(PASSTHROUGH, 50, 120);       // 8Hz
         set_scheduler_entry(STATUS_TEXT, 100, 2000);     // 0.5Hz
         // low frsky attitude rate
-        frsky->set_scheduler_entry_min_period(AP_Frsky_SPort_Passthrough::ATTITUDE, 1000); // 1Hz
+        frsky->set_scheduler_entry_min_period(AP_Frsky_SPort_Passthrough::ATTITUDE, 2000); // 0.5Hz
     }
     // low rates for frames we are not interested in, if we ever get one of these we will discard them
     frsky->set_scheduler_entry_min_period(AP_Frsky_SPort_Passthrough::GPS_LAT, 10000);  // 0.1Hz
@@ -511,6 +504,9 @@ void AP_CRSF_Telem::calc_status_text()
                     got_message = true;
                     break;
                 }
+#if DEBUG_CRSF_CUSTOM_TELEM
+                hal.console->printf("CRSF: status text msg discarded, severity=%d", _statustext.next.severity);
+#endif
             }
             if (!got_message) {
                 return;
