@@ -68,7 +68,7 @@ bool AP_CRSF_Telem::init(void)
 void AP_CRSF_Telem::setup_wfq_scheduler(void)
 {
 #if DEBUG_CRSF_CUSTOM_TELEM
-    hal.console->printf("setup_wfq_scheduler()\n");
+    gcs().send_text(MAV_SEVERITY_DEBUG, "setup_wfq_scheduler()\n");
 #endif
     // initialize packet weights for the WFQ scheduler
     // priority[i] = 1/_scheduler.packet_weight[i]
@@ -92,7 +92,7 @@ void AP_CRSF_Telem::setup_wfq_scheduler(void)
 
 void AP_CRSF_Telem::setup_custom_telemetry() {
 #if DEBUG_CRSF_CUSTOM_TELEM
-    hal.console->printf("setup_custom_telem()\n");
+    gcs().send_text(MAV_SEVERITY_DEBUG, "setup_custom_telem()\n");
 #endif
     set_scheduler_entry(BATTERY, 1000, 2000);       // 0.5Hz
     set_scheduler_entry(FLIGHT_MODE, 1000, 2000);   // 0.5Hz
@@ -103,11 +103,14 @@ void AP_CRSF_Telem::setup_custom_telemetry() {
     if (crsf == nullptr) {
         return;
     }
-    
-    update_custom_telemetry_rates(crsf->get_link_status().rf_mode);
+    _telem_rf_mode = crsf->get_link_status().rf_mode;
+    update_custom_telemetry_rates(_telem_rf_mode);
 }
 
 void AP_CRSF_Telem::update_custom_telemetry_rates(uint8_t rf_mode) {
+#if DEBUG_CRSF_CUSTOM_TELEM
+    gcs().send_text(MAV_SEVERITY_DEBUG, "update_custom_telemetry_rates()\n");
+#endif
     AP_Frsky_Telem* frsky = AP::frsky_telem();
     if (frsky == nullptr) {
         return;
@@ -140,13 +143,10 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
             return;
         }
         // detect rf mode changes
-        if ( _telem_last_rf_mode != crsf->get_link_status().rf_mode) {
-#if DEBUG_CRSF_CUSTOM_TELEM
-            hal.console->printf("rf mode:%d -> %d\n", _telem_last_rf_mode, crsf->get_link_status().rf_mode);
-#endif
-            gcs().send_text(MAV_SEVERITY_INFO, "Crossfire rf mode change detected, rf_mode=%d", crsf->get_link_status().rf_mode);
-            update_custom_telemetry_rates(_telem_last_rf_mode);
-            _telem_last_rf_mode = crsf->get_link_status().rf_mode;
+        if ( _telem_rf_mode != crsf->get_link_status().rf_mode) {
+            update_custom_telemetry_rates(_telem_rf_mode);
+            _telem_rf_mode = crsf->get_link_status().rf_mode;
+            gcs().send_text(MAV_SEVERITY_INFO, "Crossfire rf mode change detected, rf_mode=%d", _telem_rf_mode);
         }
     }
 }
@@ -159,16 +159,10 @@ bool AP_CRSF_Telem::is_packet_ready(uint8_t idx, bool queue_empty)
     case FLIGHT_MODE:
     case HEARTBEAT:
     case ATTITUDE:
-        {
-            AP_RCProtocol_CRSF* crsf = AP::crsf();
-            if (crsf == nullptr) {
-                return true;
-            }
-            // check link telemetry rate
-            if (rc().crsf_custom_telemetry() && crsf->get_link_status().rf_mode != AP_RCProtocol_CRSF::RFMode::CRSF_RF_MODE_150HZ) {
-                // on slow telemetry rates drop all CRSF telemetry but passthrough frames
-                return false;
-            }
+        // check link telemetry rate
+        if (rc().crsf_custom_telemetry() && _telem_rf_mode != AP_RCProtocol_CRSF::RFMode::CRSF_RF_MODE_150HZ) {
+            // on slow telemetry rates drop all CRSF telemetry but passthrough frames
+            return false;
         }
         return true;
     case PARAMETERS:
@@ -507,8 +501,8 @@ void AP_CRSF_Telem::calc_status_text()
     if (!_statustext.available) {
         WITH_SEMAPHORE(_statustext.sem);
         // check link speed
-        if (_telem_last_rf_mode != AP_RCProtocol_CRSF::CRSF_RF_MODE_150HZ) {
-            // drop all non warning/error/critical status text messages
+        if (_telem_rf_mode != AP_RCProtocol_CRSF::CRSF_RF_MODE_150HZ) {
+            // keep only warning/error/critical/alert/emergency status text messages
             bool got_message = false;
             while (_statustext.queue.pop(_statustext.next)) {
                 if (_statustext.next.severity <= MAV_SEVERITY_WARNING) {

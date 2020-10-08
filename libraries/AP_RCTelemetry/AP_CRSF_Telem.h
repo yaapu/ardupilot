@@ -206,7 +206,7 @@ private:
     TelemetryPayload _telem;
     uint8_t _telem_size;
     uint8_t _telem_type;
-    uint8_t _telem_last_rf_mode;
+    uint8_t _telem_rf_mode;
     
     bool _telem_pending;
     bool _enable_telemetry;
