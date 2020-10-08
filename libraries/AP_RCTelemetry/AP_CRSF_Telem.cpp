@@ -147,9 +147,9 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
     }
     // detect rf mode changes
     if ( _telem_rf_mode != crsf->get_link_status().rf_mode) {
-        update_custom_telemetry_rates(_telem_rf_mode);
+        gcs().send_text(MAV_SEVERITY_INFO, "Crossfire rf mode change detected, rf_mode=%d", crsf->get_link_status().rf_mode);
+        update_custom_telemetry_rates(crsf->get_link_status().rf_mode);
         _telem_rf_mode = crsf->get_link_status().rf_mode;
-        gcs().send_text(MAV_SEVERITY_INFO, "Crossfire rf mode change detected, rf_mode=%d", _telem_rf_mode);
     }
 }
 
