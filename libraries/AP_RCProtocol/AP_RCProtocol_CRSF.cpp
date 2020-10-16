@@ -184,12 +184,6 @@ void AP_RCProtocol_CRSF::_process_byte(uint32_t timestamp_us, uint8_t byte)
     if (_frame_ofs == _frame.length + CSRF_HEADER_LEN) {
         log_data(AP_RCProtocol::CRSF, timestamp_us, (const uint8_t*)&_frame, _frame_ofs - CSRF_HEADER_LEN);
 
-        if ((timestamp_us - _last_frame_time_us) <= CRSF_INTER_FRAME_TIME_US_150HZ + CRSF_MAX_FRAME_TIME_US) {
-            _fast_telem = true;
-        } else {
-            _fast_telem = false;
-        }
-
         // we consumed the partial frame, reset
         _frame_ofs = 0;
 
@@ -206,7 +200,7 @@ void AP_RCProtocol_CRSF::_process_byte(uint32_t timestamp_us, uint8_t byte)
         _last_frame_time_us = timestamp_us;
         // decode here
         if (decode_csrf_packet()) {
-            add_input(MAX_CHANNELS, _channels, false, _current_rssi);
+            add_input(MAX_CHANNELS, _channels, false, _link_status.rssi);
         }
     }    
 }
@@ -332,7 +326,6 @@ bool AP_RCProtocol_CRSF::process_telemetry(bool check_constraint)
         // we've been too slow in responding
         return false;
     }
-
     write_frame(&_telemetry_frame);
     // get fresh telem_data in the next call
     telem_available = false;
@@ -353,13 +346,15 @@ void AP_RCProtocol_CRSF::process_link_stats_frame(const void* data)
     }
      // AP rssi: -1 for unknown, 0 for no link, 255 for maximum link
     if (rssi_dbm < 50) {
-        _current_rssi = 255;
+        _link_status.rssi = 255;
     } else if (rssi_dbm > 120) {
-        _current_rssi = 0;
+        _link_status.rssi = 0;
     } else {
         // this is an approximation recommended by Remo from TBS
-        _current_rssi = int16_t(roundf((1.0f - (rssi_dbm - 50.0f) / 70.0f) * 255.0f));
+        _link_status.rssi = int16_t(roundf((1.0f - (rssi_dbm - 50.0f) / 70.0f) * 255.0f));
     }
+
+    _link_status.rf_mode = link->rf_mode;
 }
 
 // process a byte provided by a uart
