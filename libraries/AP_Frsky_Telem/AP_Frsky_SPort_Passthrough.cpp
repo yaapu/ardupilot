@@ -482,9 +482,23 @@ uint32_t AP_Frsky_SPort_Passthrough::calc_attiandrng(void)
 /*
   fetch Sport data for an external transport, such as FPort
  */
-bool AP_Frsky_SPort_Passthrough::get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data)
+bool AP_Frsky_SPort_Passthrough::get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data, uint8_t packet_type)
 {
-    run_wfq_scheduler();
+    if (packet_type == 0xFF) {
+        // run the scheduler
+        run_wfq_scheduler();
+    } else {
+        // do not run the scheduler and return a specific packet type
+        bool queue_empty;
+        {
+            WITH_SEMAPHORE(_statustext.sem);
+            queue_empty = !_statustext.available && _statustext.queue.is_empty();
+        }
+
+        if (is_packet_ready(packet_type, queue_empty)) {
+            process_packet(packet_type);
+        }
+    }
     if (!external_data.pending) {
         return false;
     }

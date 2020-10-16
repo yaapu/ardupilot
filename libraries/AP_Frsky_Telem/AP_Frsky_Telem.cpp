@@ -74,18 +74,18 @@ bool AP_Frsky_Telem::init(bool use_external_data)
     return true;
 }
 
-bool AP_Frsky_Telem::_get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data)
+bool AP_Frsky_Telem::_get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data, uint8_t packet_type)
 {
     if (_backend == nullptr) {
         return false;
     }
-    return _backend->get_telem_data(frame, appid, data);
+    return _backend->get_telem_data(frame, appid, data, packet_type);
 }
 
 /*
   fetch Sport data for an external transport, such as FPort
  */
-bool AP_Frsky_Telem::get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data)
+bool AP_Frsky_Telem::get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data, uint8_t packet_type)
 {
     if (!singleton && !hal.util->get_soft_armed()) {
         // if telem data is requested when we are disarmed and don't
@@ -99,7 +99,7 @@ bool AP_Frsky_Telem::get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &d
     if (!singleton) {
         return false;
     }
-    return singleton->_get_telem_data(frame, appid, data);
+    return singleton->_get_telem_data(frame, appid, data, packet_type);
 }
 
 namespace AP {

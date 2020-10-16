@@ -15,6 +15,7 @@
 #pragma once
 
 #include "AP_Frsky_Backend.h"
+#include "AP_Frsky_SPort.h"
 
 class AP_Frsky_Telem {
 public:
@@ -34,7 +35,21 @@ public:
     }
 
     // get next telemetry data for external consumers of SPort data
-    static bool get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data);
+    static bool get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data, uint8_t packet_type = 0xFF);
+
+    void set_scheduler_entry_min_period(uint8_t slot, uint32_t min_period_ms) {
+        if (_backend == nullptr) {
+            return;
+        }
+        return _backend->set_scheduler_entry_min_period(slot, min_period_ms);
+    }
+
+    void reset_scheduler_entry_min_periods() {
+        if (_backend == nullptr) {
+            return;
+        }
+        return _backend->reset_scheduler_entry_min_periods();
+    }
 
     void queue_message(MAV_SEVERITY severity, const char *text) {
         if (_backend == nullptr) {
@@ -48,7 +63,7 @@ private:
     AP_Frsky_Backend *_backend;
 
     // get next telemetry data for external consumers of SPort data (internal function)
-    bool _get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data);
+    bool _get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data, uint8_t packet_type = 0xFF);
 
     static AP_Frsky_Telem *singleton;
 

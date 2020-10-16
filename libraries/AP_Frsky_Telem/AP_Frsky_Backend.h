@@ -22,9 +22,17 @@ public:
     }
 
     // get next telemetry data for external consumers of SPort data
-    virtual bool get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data)
+    virtual bool get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data, uint8_t packet_type = 0xFF)
     {
         return false;
+    }
+
+    virtual void set_scheduler_entry_min_period(uint8_t slot, uint32_t min_period_ms) {
+        return;
+    }
+
+    virtual void reset_scheduler_entry_min_periods() {
+        return;
     }
 
     virtual void queue_text_message(MAV_SEVERITY severity, const char *text) { }
