@@ -114,6 +114,38 @@ public:
         uint8_t origin;
     } PACKED;
 
+    // Frame to hold passthrough telemetry
+    struct PassthroughFrame {
+        uint8_t sub_type;
+        uint16_t appid;
+        uint32_t data;
+    } PACKED;
+
+    // Frame to hold passthrough telemetry
+    struct PassthroughArrayFrame {
+        uint8_t sub_type;
+        uint8_t size;
+        struct {
+            uint16_t appid;
+            uint32_t data;
+        } PACKED frames[9];
+    } PACKED;
+
+    // Frame to hold status text message
+    struct StatusTextFrame {
+        uint8_t sub_type;
+        uint8_t severity;
+        char text[50];  // ( Null-terminated string )
+    } PACKED;
+
+    // ardupilot frametype container
+    union CustomTelemFrame {
+        PassthroughFrame passthrough;
+        PassthroughArrayFrame passthrough_array;
+        StatusTextFrame status_text;
+    } PACKED;
+
+
     union BroadcastFrame {
         GPSFrame gps;
         HeartbeatFrame heartbeat;
@@ -121,6 +153,7 @@ public:
         VTXFrame vtx;
         AttitudeFrame attitude;
         FlightModeFrame flightmode;
+        CustomTelemFrame ardupilot;
     } PACKED;
 
     union ExtendedFrame {
@@ -149,6 +182,8 @@ private:
         BATTERY,
         GPS,
         FLIGHT_MODE,
+        PASSTHROUGH,
+        STATUS_TEXT,
         NUM_SENSORS
     };
 
@@ -156,7 +191,9 @@ private:
     bool is_packet_ready(uint8_t idx, bool queue_empty) override;
     void process_packet(uint8_t idx) override;
     void adjust_packet_weight(bool queue_empty) override;
-
+    void setup_custom_telemetry();
+    void update_custom_telemetry_rates(uint8_t rf_mode);
+    
     void calc_parameter_ping();
     void calc_heartbeat();
     void calc_battery();
@@ -164,6 +201,9 @@ private:
     void calc_attitude();
     void calc_flight_mode();
     void update_params();
+    void get_passthrough_telem_data();
+    void get_passthrough_array_telem_data();
+    void calc_status_text();
 
     void process_vtx_frame(VTXFrame* vtx);
     void process_vtx_telem_frame(VTXTelemetryFrame* vtx);
@@ -178,7 +218,8 @@ private:
     TelemetryPayload _telem;
     uint8_t _telem_size;
     uint8_t _telem_type;
-
+    uint8_t _telem_rf_mode;
+    
     bool _telem_pending;
     bool _enable_telemetry;
 
