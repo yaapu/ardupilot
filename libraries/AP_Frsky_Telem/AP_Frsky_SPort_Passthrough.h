@@ -28,13 +28,43 @@ public:
 
     bool get_next_msg_chunk(void) override;
 
-    bool get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data) override;
+    bool get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data, uint8_t packet_type = 0xFF) override;
 
     void queue_text_message(MAV_SEVERITY severity, const char *text) override
     {
         AP_RCTelemetry::queue_message(severity, text);
     }
 
+    void disable_scheduler_entry(const uint8_t slot) override {
+        AP_RCTelemetry::disable_scheduler_entry(slot);
+    }
+
+    void enable_scheduler_entry(const uint8_t slot) override {
+        AP_RCTelemetry::enable_scheduler_entry(slot);
+    }
+
+    void set_scheduler_entry_min_period(const uint8_t slot, const uint32_t min_period_ms) override {
+        AP_RCTelemetry::set_scheduler_entry_min_period(slot, min_period_ms);
+    }
+
+    void reset_scheduler_entry_min_periods() override {
+        setup_wfq_scheduler();
+    }
+
+    enum PassthroughPacketType : uint8_t {
+        TEXT =          0,  // 0x5000 status text (dynamic)
+        ATTITUDE =      1,  // 0x5006 Attitude and range (dynamic)
+        GPS_LAT =       2,  // 0x800 GPS lat
+        GPS_LON =       3,  // 0x800 GPS lon
+        VEL_YAW =       4,  // 0x5005 Vel and Yaw
+        AP_STATUS =     5,  // 0x5001 AP status
+        GPS_STATUS =    6,  // 0x5002 GPS status
+        HOME =          7,  // 0x5004 Home
+        BATT_2 =        8,  // 0x5008 Battery 2 status
+        BATT_1 =        9,  // 0x5008 Battery 1 status
+        PARAM =         10, // 0x5007 parameters
+        WFQ_LAST_ITEM       // must be last
+    };
 
 protected:
 
@@ -48,20 +78,6 @@ private:
         BATT_FS_CAPACITY =    3,
         BATT_CAPACITY_1 =     4,
         BATT_CAPACITY_2 =     5
-    };
-
-    enum PassthroughPacketType : uint8_t {
-        TEXT =          0,  // 0x5000 status text (dynamic)
-        ATTITUDE =      1,  // 0x5006 Attitude and range (dynamic)
-        GPS_LAT =       2,  // 0x800 GPS lat
-        GPS_LON =       3,  // 0x800 GPS lon
-        VEL_YAW =       4,  // 0x5005 Vel and Yaw
-        AP_STATUS =     5,  // 0x5001 AP status
-        GPS_STATUS =    6,  // 0x5002 GPS status
-        HOME =          7,  // 0x5004 Home
-        BATT_2 =        8,  // 0x5008 Battery 2 status
-        BATT_1 =        9,  // 0x5008 Battery 1 status
-        PARAM =         10  // 0x5007 parameters
     };
 
     // methods to convert flight controller data to FrSky SPort Passthrough (OpenTX) format
