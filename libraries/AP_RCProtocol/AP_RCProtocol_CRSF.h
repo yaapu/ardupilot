@@ -55,6 +55,14 @@ public:
         CRSF_FRAMETYPE_PARAMETER_READ = 0x2C,
         CRSF_FRAMETYPE_PARAMETER_WRITE = 0x2D,
         CRSF_FRAMETYPE_COMMAND = 0x32,
+        // MSP commands
+        CRSF_FRAMETYPE_MSP_REQ = 0x7A,          // response request using msp sequence as command
+        CRSF_FRAMETYPE_MSP_RESP = 0x7B,         // reply with 58 byte chunked binary
+        CRSF_FRAMETYPE_MSP_WRITE = 0x7C,        // write with 8 byte chunked binary (OpenTX outbound telemetry buffer limit)
+        CRSF_FRAMETYPE_DISPLAYPORT_CMD = 0x7D,  // displayport control command
+        // Custom telemetry frame type is 0x80
+        //CRSF_FRAMETYPE_CUSTOM_TELEM = 0x32,   // for now we recycle the COMMAND_FRAME and use a sub type not overlapping existing command IDs
+        CRSF_FRAMETYPE_CUSTOM_TELEM = 0x7F,     // as suggested by Remo Masina
     };
 
     // Command IDs for CRSF_FRAMETYPE_COMMAND
@@ -116,6 +124,13 @@ public:
         CRSF_COMMAND_RX_BIND = 0x01,
     };
 
+    // SubType IDs for CRSF_FRAMETYPE_CUSTOM_TELEM
+    enum CustomTelemSubTypeID : uint8_t {
+        CRSF_CUSTOM_TELEM_PASSTHROUGH = 0xF0,
+        CRSF_CUSTOM_TELEM_STATUS_TEXT = 0xF1,
+        CRSF_CUSTOM_TELEM_PASSTHROUGH_ARRAY = 0xF2,
+    };
+
     enum DeviceAddress {
         CRSF_ADDRESS_BROADCAST = 0x00,
         CRSF_ADDRESS_USB = 0x10,
@@ -161,6 +176,21 @@ public:
         int8_t downlink_dnr; // ( db )
     } PACKED;
 
+    enum RFMode : uint8_t {
+        CRSF_RF_MODE_4HZ = 0,
+        CRSF_RF_MODE_50HZ,
+        CRSF_RF_MODE_150HZ,
+    };
+
+    struct LinkStatus {
+        int16_t rssi = -1;
+        uint8_t rf_mode;
+    } PACKED;
+
+    const volatile LinkStatus& get_link_status() const {
+        return _link_status;
+    }
+
 private:
     struct Frame _frame;
     struct Frame _telemetry_frame;
@@ -187,8 +217,8 @@ private:
     uint32_t _last_rx_time_us;
     uint32_t _start_frame_time_us;
     bool telem_available;
-    bool _fast_telem; // is 150Hz telemetry active
-    int16_t _current_rssi = -1;
+    
+    volatile struct LinkStatus _link_status;
 
     AP_HAL::UARTDriver *_uart;
 
