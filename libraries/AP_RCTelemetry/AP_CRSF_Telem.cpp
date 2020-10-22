@@ -24,11 +24,22 @@
 #include <AP_SerialManager/AP_SerialManager.h>
 #include <AP_AHRS/AP_AHRS.h>
 #include <AP_Notify/AP_Notify.h>
+#include <AP_Frsky_Telem/AP_Frsky_SPort_Passthrough.h>
 #include <math.h>
 #include <stdio.h>
 
 #if HAL_CRSF_TELEM_ENABLED
 
+#define CRSF_CUSTOM_TELEM_DEBUG         0
+#define CRSF_CUSTOM_TELEM_STATS         0
+#define CRSF_CUSTOM_TELEM_FAKE_PACKET   0
+
+#if CRSF_CUSTOM_TELEM_FAKE_PACKET
+uint32_t _crsf_packet_sequence;
+#endif
+#if CRSF_CUSTOM_TELEM_STATS
+uint32_t _crsf_packet_stats_time;
+#endif
 // #define CRSF_DEBUG
 #ifdef CRSF_DEBUG
 # define debug(fmt, args...)	hal.console->printf("CRSF: " fmt "\n", ##args)
@@ -76,18 +87,96 @@ void AP_CRSF_Telem::setup_wfq_scheduler(void)
     add_scheduler_entry(1300, 500); // battery           2Hz
     add_scheduler_entry(550, 280);  // GPS               3Hz
     add_scheduler_entry(550, 500);  // flight mode       2Hz
+    add_scheduler_entry(5000, 50);  // passthrough       max 20Hz
+    add_scheduler_entry(5000, 500); // status text       max 2Hz
+}
+
+void AP_CRSF_Telem::setup_custom_telemetry() {
+    if (!rc().crsf_custom_telemetry()) {
+        return;
+    }
+
+    if (_custom_telem_init_done) {
+        return;
+    }
+
+    AP_Frsky_Telem* frsky = AP::frsky_telem();
+    if (frsky == nullptr) {
+        return;
+    }
+    
+    AP_RCProtocol_CRSF* crsf = AP::crsf();
+    if (crsf == nullptr) {
+        return;
+    }
+
+    frsky->disable_scheduler_entry(AP_Frsky_SPort_Passthrough::GPS_LAT);
+    frsky->disable_scheduler_entry(AP_Frsky_SPort_Passthrough::GPS_LON);
+    frsky->disable_scheduler_entry(AP_Frsky_SPort_Passthrough::TEXT);
+    frsky->set_scheduler_entry_min_period(AP_Frsky_SPort_Passthrough::ATTITUDE, 120); // 5Hz
+
+    // CRSF telemetry rates for custom telemetry
+    set_scheduler_entry(BATTERY, 1000, 1000);       // 1Hz
+    set_scheduler_entry(ATTITUDE, 1000, 1000);      // 1Hz
+    set_scheduler_entry(FLIGHT_MODE, 1200, 2000);   // 0.5Hz
+    set_scheduler_entry(HEARTBEAT, 2000, 5000);     // 0.2Hz
+    
+    _telem_rf_mode = crsf->get_link_status().rf_mode;
+    update_custom_telemetry_rates(_telem_rf_mode);
+
+    gcs().send_text(MAV_SEVERITY_DEBUG,"CRSF: custom telemetry initialized");
+    _custom_telem_init_done = true;
+}
+
+void AP_CRSF_Telem::update_custom_telemetry_rates(uint8_t rf_mode) {
+    if (rf_mode == AP_RCProtocol_CRSF::RFMode::CRSF_RF_MODE_150HZ) {
+        // custom telemetry for high data rates
+        set_scheduler_entry(GPS, 550, 280);           // 3Hz
+        set_scheduler_entry(PASSTHROUGH, 50, 50);     // 20Hz
+        set_scheduler_entry(STATUS_TEXT, 100, 500);   // 2Hz
+    } else {
+        // custom telemetry for low data rates
+        set_scheduler_entry(GPS, 550, 1000);              // 1Hz
+        set_scheduler_entry(PASSTHROUGH, 500, 3000);      // 0.5Hz
+        set_scheduler_entry(STATUS_TEXT, 600, 2000);      // 0.5Hz
+    }
+}
+
+void AP_CRSF_Telem::process_rf_mode_changes()
+{
+    if (!rc().crsf_custom_telemetry()) {
+        return;
+    }
+
+    AP_RCProtocol_CRSF* crsf = AP::crsf();
+    if (crsf == nullptr) {
+        return;
+    }
+
+    if ( _telem_rf_mode != crsf->get_link_status().rf_mode) {
+        gcs().send_text(MAV_SEVERITY_INFO, "CRSF: rf mode change %d->%d", _telem_rf_mode, crsf->get_link_status().rf_mode);
+        update_custom_telemetry_rates(crsf->get_link_status().rf_mode);
+        _telem_rf_mode = crsf->get_link_status().rf_mode;
+    }
 }
 
 void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
 {
+    setup_custom_telemetry();
 }
 
 // WFQ scheduler
 bool AP_CRSF_Telem::is_packet_ready(uint8_t idx, bool queue_empty)
 {
+    process_rf_mode_changes();
+
     switch (idx) {
     case PARAMETERS:
         return AP::vtx().have_params_changed() ||_vtx_power_change_pending || _vtx_freq_change_pending || _vtx_options_change_pending;
+    case PASSTHROUGH:
+        return rc().crsf_custom_telemetry();
+    case STATUS_TEXT:
+        return rc().crsf_custom_telemetry() && !queue_empty;
     default:
         return _enable_telemetry;
     }
@@ -115,6 +204,16 @@ void AP_CRSF_Telem::process_packet(uint8_t idx)
             break;
         case FLIGHT_MODE: // GPS
             calc_flight_mode();
+            break;
+        case PASSTHROUGH:
+            if (_telem_rf_mode == AP_RCProtocol_CRSF::RFMode::CRSF_RF_MODE_150HZ) {
+                get_passthrough_telem_data();
+            } else {
+                get_passthrough_array_telem_data();
+            }
+            break;
+        case STATUS_TEXT:
+            calc_status_text();
             break;
         default:
             break;
@@ -406,6 +505,104 @@ void AP_CRSF_Telem::calc_flight_mode()
     }
 }
 
+// prepare flight mode data
+void AP_CRSF_Telem::calc_status_text()
+{
+    if (!_statustext.available) {
+        WITH_SEMAPHORE(_statustext.sem);
+        // check link speed
+        if (_telem_rf_mode != AP_RCProtocol_CRSF::CRSF_RF_MODE_150HZ) {
+            // keep only warning/error/critical/alert/emergency status text messages
+            bool got_message = false;
+            while (_statustext.queue.pop(_statustext.next)) {
+                if (_statustext.next.severity <= MAV_SEVERITY_WARNING) {
+                    got_message = true;
+                    break;
+                }
+#if CRSF_CUSTOM_TELEM_DEBUG
+                hal.console->printf("CRSF: status text msg discarded, severity=%d\n", _statustext.next.severity);
+#endif
+            }
+            if (!got_message) {
+                return;
+            }
+        } else {
+            if (!_statustext.queue.pop(_statustext.next)) {
+                return;
+            }
+        }
+        _statustext.available = true;
+    }
+
+    _telem_type = AP_RCProtocol_CRSF::CRSF_FRAMETYPE_CUSTOM_TELEM;
+    _telem.bcast.ardupilot.status_text.sub_type = AP_RCProtocol_CRSF::CustomTelemSubTypeID::CRSF_CUSTOM_TELEM_STATUS_TEXT;
+    _telem.bcast.ardupilot.status_text.severity = _statustext.next.severity;
+    const uint8_t len = hal.util->snprintf(_telem.bcast.ardupilot.status_text.text, 50, "%s", _statustext.next.text);
+    _telem_size = len + 2; // sub_type + severity + text
+    _telem_pending = true;
+    _statustext.available = false;
+}
+
+// get passthrough telemetry data
+void AP_CRSF_Telem::get_passthrough_telem_data()
+{
+    uint8_t frame;
+    uint16_t appid;
+    uint32_t data;
+
+    _telem_pending = false;
+    if (AP_Frsky_Telem::get_telem_data(frame, appid, data)) {
+#if CRSF_CUSTOM_TELEM_DEBUG
+        hal.console->printf("WFQ: appid=%04X\n", appid);
+#endif
+        _telem.bcast.ardupilot.passthrough.sub_type = AP_RCProtocol_CRSF::CustomTelemSubTypeID::CRSF_CUSTOM_TELEM_PASSTHROUGH;
+        _telem.bcast.ardupilot.passthrough.appid = appid;
+        _telem.bcast.ardupilot.passthrough.data = data;
+        _telem_size = sizeof(AP_CRSF_Telem::PassthroughFrame);
+        _telem_type = AP_RCProtocol_CRSF::CRSF_FRAMETYPE_CUSTOM_TELEM;
+        _telem_pending = true;
+    }
+}
+
+// get passthrough telemetry data
+void AP_CRSF_Telem::get_passthrough_array_telem_data()
+{
+    uint8_t frame;
+    uint16_t appid;
+    uint32_t data;
+
+    uint8_t idx = 0;
+    _telem_pending = false;
+    // we pack 9 frames max
+#if CRSF_CUSTOM_TELEM_DEBUG
+    hal.console->printf("CRSF: array START\n");
+#endif
+    for (uint8_t i=0;i<AP_Frsky_SPort_Passthrough::WFQ_LAST_ITEM;i++) {
+        if (AP_Frsky_Telem::get_telem_data(frame, appid, data, i)) {
+            if (appid != 0x800 && appid != 0x5000) {
+                _telem.bcast.ardupilot.passthrough_array.frames[idx].appid = appid;
+                _telem.bcast.ardupilot.passthrough_array.frames[idx].data = data;
+#if CRSF_CUSTOM_TELEM_DEBUG
+                hal.console->printf("CRSF: array idx=%d, %04X:%08lX\n", idx, appid, data);
+#endif
+                idx++;
+            }
+        }
+        // did we fill the array
+        if (idx > 9) {
+            break;
+        }
+    }
+    _telem.bcast.ardupilot.passthrough_array.size = idx;
+#if CRSF_CUSTOM_TELEM_DEBUG
+    hal.console->printf("CRSF: array END, size=%d\n", idx);
+#endif
+    _telem_type = AP_RCProtocol_CRSF::CRSF_FRAMETYPE_CUSTOM_TELEM;
+    _telem.bcast.ardupilot.passthrough_array.sub_type = AP_RCProtocol_CRSF::CustomTelemSubTypeID::CRSF_CUSTOM_TELEM_PASSTHROUGH_ARRAY;
+    _telem_size = sizeof(AP_CRSF_Telem::PassthroughArrayFrame);
+    _telem_pending = true;
+}
+
 /*
   fetch CRSF frame data
  */
@@ -413,16 +610,33 @@ bool AP_CRSF_Telem::_get_telem_data(AP_RCProtocol_CRSF::Frame* data)
 {
     memset(&_telem, 0, sizeof(TelemetryPayload));
     run_wfq_scheduler();
+#if CRSF_CUSTOM_TELEM_STATS
+    uint32_t now_ms = AP_HAL::millis();
+    if (now_ms - _crsf_packet_stats_time > 5000) {
+        gcs().send_text(MAV_SEVERITY_DEBUG,"CRSF: rf mode %d, rate %d", _telem_rf_mode, _scheduler.avg_packet_rate);
+        _crsf_packet_stats_time = now_ms;
+    }
+#endif
+#if CRSF_CUSTOM_TELEM_FAKE_PACKET
+    // inject a sequence to debug packet loss at the other end
+    memset(&_telem, 0, sizeof(TelemetryPayload));
+    _telem.bcast.ardupilot.passthrough.sub_type = AP_RCProtocol_CRSF::CustomTelemSubTypeID::CRSF_CUSTOM_TELEM_PASSTHROUGH;
+    _telem.bcast.ardupilot.passthrough.appid = 0xFF;
+    _telem.bcast.ardupilot.passthrough.data = _crsf_packet_sequence++;
+    _telem_size = sizeof(AP_CRSF_Telem::PassthroughFrame);
+    _telem_type = AP_RCProtocol_CRSF::CRSF_FRAMETYPE_CUSTOM_TELEM;
+    _telem_pending = true;
+#endif
     if (!_telem_pending) {
         return false;
     }
     memcpy(data->payload, &_telem, _telem_size);
-    data->device_address = AP_RCProtocol_CRSF::CRSF_ADDRESS_FLIGHT_CONTROLLER;  // sync byte
+    //data->device_address = AP_RCProtocol_CRSF::CRSF_ADDRESS_FLIGHT_CONTROLLER;  // sync byte
+    data->device_address = AP_RCProtocol_CRSF::CRSF_ADDRESS_BROADCAST;  // sync byte
     data->length = _telem_size + 2;
     data->type = _telem_type;
 
     _telem_pending = false;
-
     return true;
 }
 

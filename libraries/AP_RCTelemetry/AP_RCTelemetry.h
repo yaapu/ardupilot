@@ -36,6 +36,29 @@ public:
     // add statustext message to message queue
     void queue_message(MAV_SEVERITY severity, const char *text);
 
+    // scheduler entry helpers
+    void enable_scheduler_entry(const uint8_t slot) {
+        if (slot >= TELEM_TIME_SLOT_MAX) {
+            return;
+        }
+        BIT_CLEAR(_disabled_scheduler_entries_bitmask, slot);
+    }
+    void disable_scheduler_entry(const uint8_t slot) {
+        if (slot >= TELEM_TIME_SLOT_MAX) {
+            return;
+        }
+        BIT_SET(_disabled_scheduler_entries_bitmask, slot);
+    }
+    void set_scheduler_entry_min_period(const uint8_t slot, const uint32_t min_period_ms)
+    {
+        if (slot >= TELEM_TIME_SLOT_MAX) {
+            return;
+        }
+        _scheduler.packet_min_period[slot] = min_period_ms;
+    }
+    // each derived class might provide a way to reset telemetry rates to default
+    virtual void reset_scheduler_entry_min_periods() {}
+
     // update error mask of sensors and subsystems. The mask uses the
     // MAV_SYS_STATUS_* values from mavlink. If a bit is set then it
     // indicates that the sensor or subsystem is present but not
@@ -46,11 +69,17 @@ protected:
     void run_wfq_scheduler();
     // set an entry in the scheduler table
     void set_scheduler_entry(uint8_t slot, uint32_t weight, uint32_t min_period_ms) {
+        if (slot >= TELEM_TIME_SLOT_MAX) {
+            return;
+        }
         _scheduler.packet_weight[slot] = weight;
         _scheduler.packet_min_period[slot] = min_period_ms;
     }
     // add an entry to the scheduler table
     void add_scheduler_entry(uint32_t weight, uint32_t min_period_ms) {
+        if (_time_slots >= TELEM_TIME_SLOT_MAX) {
+            return;
+        }
         set_scheduler_entry(_time_slots++, weight, min_period_ms);
     }
     // setup ready for passthrough operation
@@ -81,6 +110,7 @@ protected:
 private:
     uint32_t check_sensor_status_timer;
     uint32_t check_ekf_status_timer;
+    uint32_t _disabled_scheduler_entries_bitmask;
 
     // passthrough WFQ scheduler
     virtual void setup_wfq_scheduler() = 0;

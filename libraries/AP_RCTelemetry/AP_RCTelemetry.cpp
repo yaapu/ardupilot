@@ -117,7 +117,8 @@ void AP_RCTelemetry::run_wfq_scheduler(void)
         // this is ensured by the packets being sorted by desc frequency
         // apply the rate limiter
         if (delay >= max_delay && ((now - _scheduler.packet_timer[i]) >= _scheduler.packet_min_period[i])) {
-            packet_ready = is_packet_ready(i, queue_empty);
+            // check if the entry is disabled and if not call is_packet_ready
+            packet_ready = !BIT_IS_SET(_disabled_scheduler_entries_bitmask, i) && is_packet_ready(i, queue_empty);
 
             if (packet_ready) {
                 max_delay = delay;
@@ -258,4 +259,3 @@ uint32_t AP_RCTelemetry::sensor_status_flags() const
 
     return ~health & enabled & present;
 }
-
