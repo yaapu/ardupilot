@@ -1,9 +1,10 @@
 #pragma once
 
 #include <AP_HAL/AP_HAL.h>
+#include <AP_Vehicle/AP_Vehicle_Type.h>
 
 #ifndef HAL_MSP_ENABLED
-#define HAL_MSP_ENABLED !HAL_MINIMIZE_FEATURES
+#define HAL_MSP_ENABLED !HAL_MINIMIZE_FEATURES && !APM_BUILD_TYPE(APM_BUILD_Replay)
 #endif
 
 // define for enabling MSP sensor drivers
