@@ -83,8 +83,9 @@ void AP_RCTelemetry::update_avg_packet_rate()
 
 /*
  * WFQ scheduler
+ * returns the actual packet type index (if any) sent by the scheduler
  */
-void AP_RCTelemetry::run_wfq_scheduler(void)
+uint8_t AP_RCTelemetry::run_wfq_scheduler(const bool use_shaper)
 {
     update_avg_packet_rate();
 
@@ -116,8 +117,8 @@ void AP_RCTelemetry::run_wfq_scheduler(void)
         // use >= so with equal delays we choose the packet with lowest priority
         // this is ensured by the packets being sorted by desc frequency
         // apply the rate limiter
-        if (delay >= max_delay && ((now - _scheduler.packet_timer[i]) >= _scheduler.packet_min_period[i])) {
-            packet_ready = is_packet_ready(i, queue_empty);
+        if (delay >= max_delay && check_scheduler_entry_time_constraints(now, i, use_shaper)) {
+            packet_ready = is_scheduler_entry_enabled(i) && is_packet_ready(i, queue_empty);
 
             if (packet_ready) {
                 max_delay = delay;
@@ -127,7 +128,7 @@ void AP_RCTelemetry::run_wfq_scheduler(void)
     }
 
     if (max_delay_idx < 0) {  // nothing was ready
-        return;
+        return max_delay_idx;
     }
     now = AP_HAL::millis();
 #ifdef TELEM_DEBUG
@@ -137,6 +138,32 @@ void AP_RCTelemetry::run_wfq_scheduler(void)
     //debug("process_packet(%d): %f", max_delay_idx, max_delay);
     // send packet
     process_packet(max_delay_idx);
+    // let the caller know which packet type was sent
+    return max_delay_idx;
+}
+
+/*
+ * do not run the scheduler and process a specific entry
+ */
+bool AP_RCTelemetry::process_scheduler_entry(const uint8_t slot )
+{
+    if (slot >= TELEM_TIME_SLOT_MAX) {
+        return false;
+    }
+    if (!is_scheduler_entry_enabled(slot)) {
+        return false;
+    }
+    bool queue_empty;
+    {
+        WITH_SEMAPHORE(_statustext.sem);
+        queue_empty = !_statustext.available && _statustext.queue.is_empty();
+    }
+    if (!is_packet_ready(slot, queue_empty)) {
+        return false;
+    }
+    process_packet(slot);
+    
+    return true;
 }
 
 /*
@@ -258,4 +285,3 @@ uint32_t AP_RCTelemetry::sensor_status_flags() const
 
     return ~health & enabled & present;
 }
-

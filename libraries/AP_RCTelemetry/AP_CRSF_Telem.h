@@ -49,7 +49,12 @@ public:
     virtual bool init() override;
 
     static AP_CRSF_Telem *get_singleton(void);
+    void queue_message(MAV_SEVERITY severity, const char *text) override;
 
+    static const uint8_t PASSTHROUGH_STATUS_TEXT_FRAME_MAX_SIZE = 50U;
+    static const uint8_t PASSTHROUGH_MULTI_PACKET_FRAME_MAX_SIZE = 9U;
+    static const uint8_t CRSF_RX_DEVICE_PING_MAX_RETRY = 50U;
+    
     // Broadcast frame definitions courtesy of TBS
     struct GPSFrame {   // curious fact, calling this GPS makes sizeof(GPS) return 1!
         int32_t latitude; // ( degree / 10`000`000 )
@@ -173,6 +178,38 @@ public:
         uint8_t payload[57];   // largest possible frame is 60
     } PACKED;
 
+    // Frame to hold passthrough telemetry
+    struct PassthroughSinglePacketFrame {
+        uint8_t sub_type;
+        uint16_t appid;
+        uint32_t data;
+    } PACKED;
+
+    // Frame to hold passthrough telemetry
+    struct PassthroughMultiPacketFrame {
+        uint8_t sub_type;
+        uint8_t size;
+        struct {
+            uint16_t appid;
+            uint32_t data;
+        } PACKED frames[PASSTHROUGH_MULTI_PACKET_FRAME_MAX_SIZE];
+    } PACKED;
+
+    // Frame to hold status text message
+    struct StatusTextFrame {
+        uint8_t sub_type;
+        uint8_t severity;
+        char text[PASSTHROUGH_STATUS_TEXT_FRAME_MAX_SIZE];  // ( Null-terminated string )
+    } PACKED;
+
+    // ardupilot frametype container
+    union APCustomTelemFrame {
+        PassthroughSinglePacketFrame single_packet_passthrough;
+        PassthroughMultiPacketFrame multi_packet_passthrough;
+        StatusTextFrame status_text;
+    } PACKED;
+
+
     union BroadcastFrame {
         GPSFrame gps;
         HeartbeatFrame heartbeat;
@@ -180,6 +217,7 @@ public:
         VTXFrame vtx;
         AttitudeFrame attitude;
         FlightModeFrame flightmode;
+        APCustomTelemFrame custom_telem;
     } PACKED;
 
     union ExtendedFrame {
@@ -213,6 +251,8 @@ private:
         BATTERY,
         GPS,
         FLIGHT_MODE,
+        PASSTHROUGH,
+        STATUS_TEXT,
         NUM_SENSORS
     };
 
@@ -220,6 +260,8 @@ private:
     bool is_packet_ready(uint8_t idx, bool queue_empty) override;
     void process_packet(uint8_t idx) override;
     void adjust_packet_weight(bool queue_empty) override;
+    void setup_custom_telemetry();
+    void update_custom_telemetry_rates(AP_RCProtocol_CRSF::RFMode rf_mode);
 
     void calc_parameter_ping();
     void calc_heartbeat();
@@ -228,33 +270,57 @@ private:
     void calc_attitude();
     void calc_flight_mode();
     void calc_device_info();
+    void calc_device_ping();
     void calc_parameter();
 #if HAL_CRSF_TELEM_TEXT_SELECTION_ENABLED
     void calc_text_selection( AP_OSD_ParamSetting* param, uint8_t chunk);
 #endif
     void update_params();
     void update_vtx_params();
+    void get_single_packet_passthrough_telem_data();
+    void get_multi_packet_passthrough_telem_data();
+    void calc_status_text();
+    void process_rf_mode_changes();
+    uint8_t get_custom_telem_frame_id() const;
+    AP_RCProtocol_CRSF::RFMode get_rf_mode() const;
+    bool is_high_speed_telemetry(const AP_RCProtocol_CRSF::RFMode rf_mode) const;
 
     void process_vtx_frame(VTXFrame* vtx);
     void process_vtx_telem_frame(VTXTelemetryFrame* vtx);
     void process_ping_frame(ParameterPingFrame* ping);
     void process_param_read_frame(ParameterSettingsReadFrame* read);
     void process_param_write_frame(ParameterSettingsWriteFrame* write);
+    void process_device_info_frame(ParameterDeviceInfoFrame* info);
 
-     // setup ready for passthrough operation
+    // setup ready for passthrough operation
     void setup_wfq_scheduler(void) override;
 
-     // get next telemetry data for external consumers
+    // get next telemetry data for external consumers
     bool _get_telem_data(AP_RCProtocol_CRSF::Frame* data);
     bool _process_frame(AP_RCProtocol_CRSF::FrameType frame_type, void* data);
 
     TelemetryPayload _telem;
     uint8_t _telem_size;
     uint8_t _telem_type;
+    AP_RCProtocol_CRSF::RFMode _telem_rf_mode;
 
     bool _telem_pending;
     bool _enable_telemetry;
-    uint8_t _request_pending;
+
+    struct {
+        uint8_t destination = AP_RCProtocol_CRSF::CRSF_ADDRESS_BROADCAST;
+        uint8_t frame_type;
+    } _pending_request;
+
+    struct {
+        uint8_t minor;
+        uint8_t major;
+        uint8_t retry_count;
+        bool use_rf_mode;
+        bool pending = true;
+    } _crsf_version;
+
+    bool _custom_telem_init_done;
 
     // vtx state
     bool _vtx_freq_update;  // update using the frequency method or not
