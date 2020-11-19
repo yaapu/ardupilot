@@ -115,12 +115,13 @@ void AP_RCProtocol_FPort2::decode_downlink(const FPort2_Frame &frame)
       status text messages
      */
     if (!telem_data.available) {
-        if (!AP_Frsky_Telem::get_telem_data(telem_data.frame, telem_data.appid, telem_data.data)) {
+        uint8_t packet_count;
+        if (!AP_Frsky_Telem::get_telem_data(&telem_data.packet, packet_count, 1)) {
             // nothing to send, send a null frame. This ensures the
             // receiver keeps requesting data from us at the full rate
-            telem_data.frame = 0x00; 
-            telem_data.appid = 0x00; 
-            telem_data.data = 0x00;
+            telem_data.packet.frame = 0x00;
+            telem_data.packet.appid = 0x00;
+            telem_data.packet.data = 0x00;
         }
         telem_data.available = true;
     }
@@ -141,10 +142,10 @@ void AP_RCProtocol_FPort2::decode_downlink(const FPort2_Frame &frame)
 
     buf[0] = 0x08;
     buf[1] = frame.type;
-    buf[2] = telem_data.frame;
-    buf[3] = telem_data.appid & 0xFF;
-    buf[4] = telem_data.appid >> 8;
-    memcpy(&buf[5], &telem_data.data, 4);
+    buf[2] = telem_data.packet.frame;
+    buf[3] = telem_data.packet.appid & 0xFF;
+    buf[4] = telem_data.packet.appid >> 8;
+    memcpy(&buf[5], &telem_data.packet.data, 4);
     buf[9] = crc_sum8(&buf[1], 8);
     
     uart->write(buf, sizeof(buf));
