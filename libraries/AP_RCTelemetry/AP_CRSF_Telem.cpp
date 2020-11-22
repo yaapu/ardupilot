@@ -107,7 +107,7 @@ void AP_CRSF_Telem::setup_custom_telemetry() {
     passthrough->disable_scheduler_entry(AP_Frsky_SPort_Passthrough::GPS_LAT);
     passthrough->disable_scheduler_entry(AP_Frsky_SPort_Passthrough::GPS_LON);
     passthrough->disable_scheduler_entry(AP_Frsky_SPort_Passthrough::TEXT);
-    passthrough->set_scheduler_entry_min_period(AP_Frsky_SPort_Passthrough::ATTITUDE, 200); // 5Hz
+    passthrough->set_scheduler_entry_min_period(AP_Frsky_SPort_Passthrough::ATTITUDE, 350); // 3Hz
 
     // setup the crossfire scheduler for custom telemetry
     set_scheduler_entry(BATTERY, 1000, 1000);       // 1Hz
@@ -131,12 +131,12 @@ void AP_CRSF_Telem::update_custom_telemetry_rates(AP_RCProtocol_CRSF::RFMode rf_
 
     if (is_high_speed_telemetry(rf_mode)) {
         // custom telemetry for high data rates
-        set_scheduler_entry(GPS, 550, 280);           // 3Hz
-        set_scheduler_entry(PASSTHROUGH, 100, 50);    // 20Hz
-        set_scheduler_entry(STATUS_TEXT, 200, 500);   // 2Hz
+        set_scheduler_entry(GPS, 550, 500);           // 2.0Hz
+        set_scheduler_entry(PASSTHROUGH, 100, 100);   // 10Hz
+        set_scheduler_entry(STATUS_TEXT, 200, 750);   // 1.5Hz
     } else {
         // custom telemetry for low data rates
-        set_scheduler_entry(GPS, 550, 1000);              // 1Hz
+        set_scheduler_entry(GPS, 550, 1000);              // 1.0Hz
         set_scheduler_entry(PASSTHROUGH, 500, 3000);      // 0.5Hz
         set_scheduler_entry(STATUS_TEXT, 600, 2000);      // 0.5Hz
     }
@@ -201,8 +201,9 @@ void AP_CRSF_Telem::enter_scheduler_params_mode()
     set_scheduler_entry(BATTERY, 1300, 500);            // battery           2Hz
     set_scheduler_entry(GPS, 550, 280);                 // GPS               3Hz
     set_scheduler_entry(FLIGHT_MODE, 550, 500);         // flight mode       2Hz
-    set_scheduler_entry(PASSTHROUGH, 5000, 50);         // passthrough       max 20Hz
-    set_scheduler_entry(STATUS_TEXT, 5000, 500);        // status text       max 2Hz
+    
+    disable_scheduler_entry(PASSTHROUGH);
+    disable_scheduler_entry(STATUS_TEXT);
 }
 
 void AP_CRSF_Telem::exit_scheduler_params_mode()
@@ -214,6 +215,9 @@ void AP_CRSF_Telem::exit_scheduler_params_mode()
     set_scheduler_entry(FLIGHT_MODE, 1200, 2000);   // 0.5Hz
     set_scheduler_entry(HEARTBEAT, 2000, 5000);     // 0.2Hz
     
+    enable_scheduler_entry(PASSTHROUGH);
+    enable_scheduler_entry(STATUS_TEXT);
+
     update_custom_telemetry_rates(_telem_rf_mode);
 }
 
@@ -229,7 +233,7 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
     uint32_t now_ms = AP_HAL::millis();
     bool expired = (now_ms - _pending_request.params_mode_start_ms) > 10000;
     
-    if (_pending_request.frame_type > 0) {
+    if (!_pending_request.params_mode_active && _pending_request.frame_type > 0) {
         // fast window start
         _pending_request.params_mode_start_ms = now_ms;
         _pending_request.params_mode_active = true;
