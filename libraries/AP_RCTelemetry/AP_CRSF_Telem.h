@@ -295,6 +295,10 @@ private:
     // setup ready for passthrough operation
     void setup_wfq_scheduler(void) override;
 
+    // setup the scheduler for parameters download
+    void enter_scheduler_params_mode();
+    void exit_scheduler_params_mode();
+    
     // get next telemetry data for external consumers
     bool _get_telem_data(AP_RCProtocol_CRSF::Frame* data);
     bool _process_frame(AP_RCProtocol_CRSF::FrameType frame_type, void* data);
@@ -310,6 +314,8 @@ private:
     struct {
         uint8_t destination = AP_RCProtocol_CRSF::CRSF_ADDRESS_BROADCAST;
         uint8_t frame_type;
+        uint32_t params_mode_start_ms;
+        bool params_mode_active;
     } _pending_request;
 
     struct {

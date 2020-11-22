@@ -74,7 +74,7 @@ void AP_CRSF_Telem::setup_wfq_scheduler(void)
 
     // CSRF telemetry rate is 150Hz (4ms) max, so these rates must fit
     add_scheduler_entry(50, 100);   // heartbeat        10Hz
-    add_scheduler_entry(200, 50);   // parameters       20Hz (generally not active unless requested by the TX)
+    add_scheduler_entry(50, 50);    // parameters       20Hz (generally not active unless requested by the TX)
     add_scheduler_entry(50, 120);   // Attitude and compass 8Hz
     add_scheduler_entry(200, 1000); // VTX parameters    1Hz
     add_scheduler_entry(1300, 500); // battery           2Hz
@@ -124,11 +124,16 @@ void AP_CRSF_Telem::setup_custom_telemetry() {
 }
 
 void AP_CRSF_Telem::update_custom_telemetry_rates(AP_RCProtocol_CRSF::RFMode rf_mode) {
+    // ignore rf mode changes if we are processing parameter packets
+    if (_pending_request.params_mode_active) {
+        return;
+    }
+
     if (is_high_speed_telemetry(rf_mode)) {
         // custom telemetry for high data rates
         set_scheduler_entry(GPS, 550, 280);           // 3Hz
-        set_scheduler_entry(PASSTHROUGH, 50, 50);     // 20Hz
-        set_scheduler_entry(STATUS_TEXT, 100, 500);   // 2Hz
+        set_scheduler_entry(PASSTHROUGH, 100, 50);    // 20Hz
+        set_scheduler_entry(STATUS_TEXT, 200, 500);   // 2Hz
     } else {
         // custom telemetry for low data rates
         set_scheduler_entry(GPS, 550, 1000);              // 1Hz
@@ -188,9 +193,52 @@ void AP_CRSF_Telem::queue_message(MAV_SEVERITY severity, const char *text)
     AP_RCTelemetry::queue_message(severity, text);
 }
 
+void AP_CRSF_Telem::enter_scheduler_params_mode()
+{
+    hal.console->printf("param fast window START\n");
+    set_scheduler_entry(HEARTBEAT, 50, 100);            // heartbeat        10Hz
+    set_scheduler_entry(ATTITUDE, 50, 120);             // Attitude and compass 8Hz
+    set_scheduler_entry(BATTERY, 1300, 500);            // battery           2Hz
+    set_scheduler_entry(GPS, 550, 280);                 // GPS               3Hz
+    set_scheduler_entry(FLIGHT_MODE, 550, 500);         // flight mode       2Hz
+    set_scheduler_entry(PASSTHROUGH, 5000, 50);         // passthrough       max 20Hz
+    set_scheduler_entry(STATUS_TEXT, 5000, 500);        // status text       max 2Hz
+}
+
+void AP_CRSF_Telem::exit_scheduler_params_mode()
+{
+    hal.console->printf("param fast window STOP\n");
+    // setup the crossfire scheduler for custom telemetry
+    set_scheduler_entry(BATTERY, 1000, 1000);       // 1Hz
+    set_scheduler_entry(ATTITUDE, 1000, 1000);      // 1Hz
+    set_scheduler_entry(FLIGHT_MODE, 1200, 2000);   // 0.5Hz
+    set_scheduler_entry(HEARTBEAT, 2000, 5000);     // 0.2Hz
+    
+    update_custom_telemetry_rates(_telem_rf_mode);
+}
+
 void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
 {
     setup_custom_telemetry();
+
+    /*
+     whenever we detect a pending request we configure the scheduler
+     to allow faster parameters processing.
+     We start a "fast parameter window" that we close after a 10sec idle time
+    */
+    uint32_t now_ms = AP_HAL::millis();
+    bool expired = (now_ms - _pending_request.params_mode_start_ms) > 10000;
+    
+    if (_pending_request.frame_type > 0) {
+        // fast window start
+        _pending_request.params_mode_start_ms = now_ms;
+        _pending_request.params_mode_active = true;
+        enter_scheduler_params_mode();
+    } else if (expired && _pending_request.params_mode_active) {
+        // fast window stop
+        _pending_request.params_mode_active = false;
+        exit_scheduler_params_mode();
+    }
 }
 
 // WFQ scheduler
