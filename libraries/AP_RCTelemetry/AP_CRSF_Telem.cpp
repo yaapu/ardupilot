@@ -39,6 +39,10 @@
 # define debug(fmt, args...)	do {} while(0)
 #endif
 
+#ifdef DEBUG_WFQ_PACKET_RATE
+uint32_t _packet_stats_timer_ms;
+#endif
+
 extern const AP_HAL::HAL& hal;
 
 AP_CRSF_Telem *AP_CRSF_Telem::singleton;
@@ -195,7 +199,7 @@ void AP_CRSF_Telem::queue_message(MAV_SEVERITY severity, const char *text)
 
 void AP_CRSF_Telem::enter_scheduler_params_mode()
 {
-    hal.console->printf("param fast window START\n");
+    hal.console->printf("CRSF: param fast window START\n");
     set_scheduler_entry(HEARTBEAT, 50, 100);            // heartbeat        10Hz
     set_scheduler_entry(ATTITUDE, 50, 120);             // Attitude and compass 8Hz
     set_scheduler_entry(BATTERY, 1300, 500);            // battery           2Hz
@@ -208,7 +212,7 @@ void AP_CRSF_Telem::enter_scheduler_params_mode()
 
 void AP_CRSF_Telem::exit_scheduler_params_mode()
 {
-    hal.console->printf("param fast window STOP\n");
+    hal.console->printf("CRSF: param fast window STOP\n");
     // setup the crossfire scheduler for custom telemetry
     set_scheduler_entry(BATTERY, 1000, 1000);       // 1Hz
     set_scheduler_entry(ATTITUDE, 1000, 1000);      // 1Hz
@@ -223,16 +227,21 @@ void AP_CRSF_Telem::exit_scheduler_params_mode()
 
 void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
 {
+    uint32_t now_ms = AP_HAL::millis();
+#ifdef DEBUG_WFQ_PACKET_RATE
+    if (now_ms - _packet_stats_timer_ms > 2000) {
+        _packet_stats_timer_ms = now_ms;
+        hal.console->printf("CRSF: rf_m=%d, p_rate=%dHz, s_rate=%dHz\n", (uint8_t)_telem_rf_mode, get_avg_packet_rate(), get_avg_sent_packet_rate());
+    }
+#endif
     setup_custom_telemetry();
 
     /*
      whenever we detect a pending request we configure the scheduler
      to allow faster parameters processing.
-     We start a "fast parameter window" that we close after a 10sec idle time
+     We start a "fast parameter window" that we close after 10sec
     */
-    uint32_t now_ms = AP_HAL::millis();
     bool expired = (now_ms - _pending_request.params_mode_start_ms) > 10000;
-    
     if (!_pending_request.params_mode_active && _pending_request.frame_type > 0) {
         // fast window start
         _pending_request.params_mode_start_ms = now_ms;

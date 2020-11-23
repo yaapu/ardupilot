@@ -81,6 +81,25 @@ void AP_RCTelemetry::update_avg_packet_rate()
     }
 }
 
+#ifdef DEBUG_WFQ_PACKET_RATE
+void AP_RCTelemetry::update_avg_sent_packet_rate()
+{
+    uint32_t poll_now = AP_HAL::millis();
+
+    _scheduler.avg_sent_packet_counter++;
+    
+    if (poll_now - _scheduler.sent_packet_timer > 1000) { //average in last 1000ms
+        // initialize
+        if (_scheduler.avg_sent_packet_rate == 0) _scheduler.avg_sent_packet_rate = _scheduler.avg_sent_packet_counter;
+        // moving average
+        _scheduler.avg_sent_packet_rate = (uint8_t)_scheduler.avg_sent_packet_rate * 0.75f + _scheduler.avg_sent_packet_counter * 0.25f;
+        // reset
+        _scheduler.sent_packet_timer = poll_now;
+        _scheduler.avg_sent_packet_counter = 0;
+    }
+}
+#endif
+
 /*
  * WFQ scheduler
  * returns the actual packet type index (if any) sent by the scheduler
@@ -126,10 +145,12 @@ uint8_t AP_RCTelemetry::run_wfq_scheduler(const bool use_shaper)
             }
         }
     }
-
     if (max_delay_idx < 0) {  // nothing was ready
         return max_delay_idx;
     }
+#ifdef DEBUG_WFQ_PACKET_RATE
+    update_avg_sent_packet_rate();
+#endif
     now = AP_HAL::millis();
 #ifdef TELEM_DEBUG
     _scheduler.packet_rate[max_delay_idx] = (_scheduler.packet_rate[max_delay_idx] + 1000 / (now - _scheduler.packet_timer[max_delay_idx])) / 2;

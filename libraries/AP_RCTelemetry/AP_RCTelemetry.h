@@ -23,6 +23,7 @@
 // for fair scheduler
 #define TELEM_TIME_SLOT_MAX               15
 //#define TELEM_DEBUG
+#define DEBUG_WFQ_PACKET_RATE
 
 class AP_RCTelemetry {
 public:
@@ -70,7 +71,15 @@ public:
     // indicates that the sensor or subsystem is present but not
     // functioning correctly
     uint32_t sensor_status_flags() const;
+#ifdef DEBUG_WFQ_PACKET_RATE   
+    uint8_t get_avg_packet_rate() const {
+        return _scheduler.avg_packet_rate;
+    }
 
+    uint8_t get_avg_sent_packet_rate() const {
+        return _scheduler.avg_sent_packet_rate;
+    }
+#endif
 protected:
     uint8_t run_wfq_scheduler(const bool use_shaper = true);
     // process a specific entry
@@ -103,6 +112,11 @@ protected:
         uint32_t packet_weight[TELEM_TIME_SLOT_MAX];
         uint32_t packet_min_period[TELEM_TIME_SLOT_MAX];
         uint8_t avg_packet_rate;
+#ifdef DEBUG_WFQ_PACKET_RATE   
+        uint8_t avg_sent_packet_rate;
+        uint32_t avg_sent_packet_counter;
+        uint32_t sent_packet_timer;
+#endif
 #ifdef TELEM_DEBUG
         uint8_t packet_rate[TELEM_TIME_SLOT_MAX];
 #endif
@@ -134,6 +148,9 @@ private:
     }
 
     void update_avg_packet_rate();
+#ifdef DEBUG_WFQ_PACKET_RATE        
+    void update_avg_sent_packet_rate();
+#endif
     // methods to convert flight controller data to FrSky SPort Passthrough (OpenTX) format
     void check_sensor_status_flags(void);
     void check_ekf_status(void);
