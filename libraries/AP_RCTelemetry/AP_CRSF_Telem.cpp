@@ -89,7 +89,7 @@ void AP_CRSF_Telem::setup_wfq_scheduler(void)
 }
 
 void AP_CRSF_Telem::setup_custom_telemetry() {
-    if (_custom_telem_init_done) {
+    if (_custom_telem.init_done) {
         return;
     }
 
@@ -124,12 +124,12 @@ void AP_CRSF_Telem::setup_custom_telemetry() {
     update_custom_telemetry_rates(_telem_rf_mode);
 
     gcs().send_text(MAV_SEVERITY_DEBUG,"CRSF: custom telem init done, fw %d.%02d", _crsf_version.major, _crsf_version.minor);
-    _custom_telem_init_done = true;
+    _custom_telem.init_done = true;
 }
 
 void AP_CRSF_Telem::update_custom_telemetry_rates(AP_RCProtocol_CRSF::RFMode rf_mode) {
     // ignore rf mode changes if we are processing parameter packets
-    if (_pending_request.params_mode_active) {
+    if (_custom_telem.params_mode_active) {
         return;
     }
 
@@ -176,7 +176,21 @@ AP_RCProtocol_CRSF::RFMode AP_CRSF_Telem::get_rf_mode() const
         return crsf->get_link_status().rf_mode;
     }
 
-    if (_scheduler.avg_packet_rate > 55) {  // need to carefully select this value!!
+    /*
+     Note:
+     - rf mode 2 on UARTS with DMA runs @160Hz
+     - rf mode 2 on UARTS with no DMA runs @70Hz
+    */
+    if (get_avg_packet_rate() < 40U) {
+        // no DMA rf mode 1
+        return AP_RCProtocol_CRSF::RFMode::CRSF_RF_MODE_50HZ;
+    }
+    if (get_avg_packet_rate() > 120U) {
+        // DMA rf mode 2
+        return AP_RCProtocol_CRSF::RFMode::CRSF_RF_MODE_150HZ;
+    }
+    if (get_max_packet_rate() < 120U) {
+        // no DMA rf mode 2
         return AP_RCProtocol_CRSF::RFMode::CRSF_RF_MODE_150HZ;
     }
     return AP_RCProtocol_CRSF::RFMode::CRSF_RF_MODE_50HZ;
@@ -229,9 +243,9 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
 {
     uint32_t now_ms = AP_HAL::millis();
 #ifdef DEBUG_WFQ_PACKET_RATE
-    if (now_ms - _packet_stats_timer_ms > 2000) {
+    if (now_ms - _packet_stats_timer_ms > 5000) {
         _packet_stats_timer_ms = now_ms;
-        hal.console->printf("CRSF: rf_m=%d, p_rate=%dHz, s_rate=%dHz\n", (uint8_t)_telem_rf_mode, get_avg_packet_rate(), get_avg_sent_packet_rate());
+        hal.console->printf("CRSF: rf_m=%d, m_rate=%d, p_rate=%dHz, s_rate=%dHz\n", (uint8_t)_telem_rf_mode, get_max_packet_rate(), get_avg_packet_rate(), get_avg_sent_packet_rate());
     }
 #endif
     setup_custom_telemetry();
@@ -241,15 +255,15 @@ void AP_CRSF_Telem::adjust_packet_weight(bool queue_empty)
      to allow faster parameters processing.
      We start a "fast parameter window" that we close after 10sec
     */
-    bool expired = (now_ms - _pending_request.params_mode_start_ms) > 10000;
-    if (!_pending_request.params_mode_active && _pending_request.frame_type > 0) {
+    bool expired = (now_ms - _custom_telem.params_mode_start_ms) > 10000;
+    if (!_custom_telem.params_mode_active && _pending_request.frame_type > 0) {
         // fast window start
-        _pending_request.params_mode_start_ms = now_ms;
-        _pending_request.params_mode_active = true;
+        _custom_telem.params_mode_start_ms = now_ms;
+        _custom_telem.params_mode_active = true;
         enter_scheduler_params_mode();
-    } else if (expired && _pending_request.params_mode_active) {
+    } else if (expired && _custom_telem.params_mode_active) {
         // fast window stop
-        _pending_request.params_mode_active = false;
+        _custom_telem.params_mode_active = false;
         exit_scheduler_params_mode();
     }
 }
@@ -483,8 +497,10 @@ void AP_CRSF_Telem::process_device_info_frame(ParameterDeviceInfoFrame* info)
         fw major ver = offset + terminator (8bits) + serial (32bits) + hw id (32bits) + 3rd byte of sw id = 11bytes
         fw minor ver = offset + terminator (8bits) + serial (32bits) + hw id (32bits) + 4th byte of sw id = 12bytes
     */
-    _crsf_version.major = info->payload[offset+11];
-    _crsf_version.minor = info->payload[offset+12];
+    //_crsf_version.major = info->payload[offset+11];
+    //_crsf_version.minor = info->payload[offset+12];
+    _crsf_version.major = 0;
+    _crsf_version.minor = 0;
 
     // should we use rf_mode reported by link statistics?
     if (_crsf_version.major >= 3 && _crsf_version.minor >= 72) {

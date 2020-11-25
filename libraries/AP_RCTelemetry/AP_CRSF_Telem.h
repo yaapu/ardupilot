@@ -284,6 +284,7 @@ private:
     uint8_t get_custom_telem_frame_id() const;
     AP_RCProtocol_CRSF::RFMode get_rf_mode() const;
     bool is_high_speed_telemetry(const AP_RCProtocol_CRSF::RFMode rf_mode) const;
+    void update_max_packet_rate();
 
     void process_vtx_frame(VTXFrame* vtx);
     void process_vtx_telem_frame(VTXTelemetryFrame* vtx);
@@ -314,8 +315,6 @@ private:
     struct {
         uint8_t destination = AP_RCProtocol_CRSF::CRSF_ADDRESS_BROADCAST;
         uint8_t frame_type;
-        uint32_t params_mode_start_ms;
-        bool params_mode_active;
     } _pending_request;
 
     struct {
@@ -326,7 +325,11 @@ private:
         bool pending = true;
     } _crsf_version;
 
-    bool _custom_telem_init_done;
+    struct {
+        bool init_done;
+        uint32_t params_mode_start_ms;
+        bool params_mode_active;
+    } _custom_telem;
 
     // vtx state
     bool _vtx_freq_update;  // update using the frequency method or not

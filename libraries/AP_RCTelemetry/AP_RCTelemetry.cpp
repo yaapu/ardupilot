@@ -65,7 +65,7 @@ void AP_RCTelemetry::update_avg_packet_rate()
         // initialize
         if (_scheduler.avg_packet_rate == 0) _scheduler.avg_packet_rate = _scheduler.avg_packet_counter;
         // moving average
-        _scheduler.avg_packet_rate = (uint8_t)_scheduler.avg_packet_rate * 0.75f + _scheduler.avg_packet_counter * 0.25f;
+        _scheduler.avg_packet_rate = (uint16_t)_scheduler.avg_packet_rate * 0.75f + _scheduler.avg_packet_counter * 0.25f;
         // reset
         _scheduler.last_poll_timer = poll_now;
         _scheduler.avg_packet_counter = 0;
@@ -107,6 +107,7 @@ void AP_RCTelemetry::update_avg_sent_packet_rate()
 uint8_t AP_RCTelemetry::run_wfq_scheduler(const bool use_shaper)
 {
     update_avg_packet_rate();
+    update_max_packet_rate();
 
     uint32_t now = AP_HAL::millis();
     int8_t max_delay_idx = -1;

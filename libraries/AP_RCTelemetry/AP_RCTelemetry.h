@@ -17,6 +17,7 @@
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Notify/AP_Notify.h>
 #include <AP_HAL/utility/RingBuffer.h>
+#include <AP_Math/AP_Math.h>
 
 #define TELEM_PAYLOAD_STATUS_CAPACITY          5 // size of the message buffer queue (max number of messages waiting to be sent)
 
@@ -71,12 +72,14 @@ public:
     // indicates that the sensor or subsystem is present but not
     // functioning correctly
     uint32_t sensor_status_flags() const;
-#ifdef DEBUG_WFQ_PACKET_RATE   
-    uint8_t get_avg_packet_rate() const {
+    uint16_t get_avg_packet_rate() const {
         return _scheduler.avg_packet_rate;
     }
-
-    uint8_t get_avg_sent_packet_rate() const {
+    uint16_t get_max_packet_rate() const {
+        return _scheduler.max_packet_rate;
+    }
+#ifdef DEBUG_WFQ_PACKET_RATE   
+    uint16_t get_avg_sent_packet_rate() const {
         return _scheduler.avg_sent_packet_rate;
     }
 #endif
@@ -111,9 +114,10 @@ protected:
         uint32_t packet_timer[TELEM_TIME_SLOT_MAX];
         uint32_t packet_weight[TELEM_TIME_SLOT_MAX];
         uint32_t packet_min_period[TELEM_TIME_SLOT_MAX];
-        uint8_t avg_packet_rate;
+        uint16_t avg_packet_rate;
+        uint16_t max_packet_rate;
 #ifdef DEBUG_WFQ_PACKET_RATE   
-        uint8_t avg_sent_packet_rate;
+        uint16_t avg_sent_packet_rate;
         uint32_t avg_sent_packet_counter;
         uint32_t sent_packet_timer;
 #endif
@@ -148,6 +152,9 @@ private:
     }
 
     void update_avg_packet_rate();
+    void update_max_packet_rate() {
+        _scheduler.max_packet_rate = MAX(_scheduler.avg_packet_rate, _scheduler.max_packet_rate);
+    }
 #ifdef DEBUG_WFQ_PACKET_RATE        
     void update_avg_sent_packet_rate();
 #endif
