@@ -213,7 +213,6 @@ void AP_CRSF_Telem::queue_message(MAV_SEVERITY severity, const char *text)
 
 void AP_CRSF_Telem::enter_scheduler_params_mode()
 {
-    hal.console->printf("CRSF: param fast window START\n");
     set_scheduler_entry(HEARTBEAT, 50, 100);            // heartbeat        10Hz
     set_scheduler_entry(ATTITUDE, 50, 120);             // Attitude and compass 8Hz
     set_scheduler_entry(BATTERY, 1300, 500);            // battery           2Hz
@@ -226,7 +225,6 @@ void AP_CRSF_Telem::enter_scheduler_params_mode()
 
 void AP_CRSF_Telem::exit_scheduler_params_mode()
 {
-    hal.console->printf("CRSF: param fast window STOP\n");
     // setup the crossfire scheduler for custom telemetry
     set_scheduler_entry(BATTERY, 1000, 1000);       // 1Hz
     set_scheduler_entry(ATTITUDE, 1000, 1000);      // 1Hz
@@ -497,10 +495,10 @@ void AP_CRSF_Telem::process_device_info_frame(ParameterDeviceInfoFrame* info)
         fw major ver = offset + terminator (8bits) + serial (32bits) + hw id (32bits) + 3rd byte of sw id = 11bytes
         fw minor ver = offset + terminator (8bits) + serial (32bits) + hw id (32bits) + 4th byte of sw id = 12bytes
     */
-    //_crsf_version.major = info->payload[offset+11];
-    //_crsf_version.minor = info->payload[offset+12];
-    _crsf_version.major = 0;
-    _crsf_version.minor = 0;
+    _crsf_version.major = info->payload[offset+11];
+    _crsf_version.minor = info->payload[offset+12];
+    //_crsf_version.major = 0;
+    //_crsf_version.minor = 0;
 
     // should we use rf_mode reported by link statistics?
     if (_crsf_version.major >= 3 && _crsf_version.minor >= 72) {

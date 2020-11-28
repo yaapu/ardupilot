@@ -24,7 +24,7 @@
 // for fair scheduler
 #define TELEM_TIME_SLOT_MAX               15
 //#define TELEM_DEBUG
-#define DEBUG_WFQ_PACKET_RATE
+//#define DEBUG_WFQ_PACKET_RATE
 
 class AP_RCTelemetry {
 public:
