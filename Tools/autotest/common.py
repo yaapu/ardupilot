@@ -8958,19 +8958,14 @@ switch value'''
         param_value = self.bit_extract(value, 0, 24)
         self.progress("received param (0x%02x) (id=%u value=%u)" %
                       (value, param_id, param_value))
-        frame_type = param_value
-        hb = self.mav.recv_match(
-            type='HEARTBEAT',
-            blocking=True,
-            timeout=1,
-        )
-        if hb is None:
-            raise NotAchievedException("Did not get HEARTBEAT message")
-        hb_type = hb.type
-        self.progress("validate_params: HEARTBEAT type==%f frsky==%f param_id=%u" % (hb_type, frame_type, param_id))
-        if param_id != 1:
+        if param_id != 4:
             return False
-        if hb_type == frame_type:
+        battery_capacity = param_value
+        param_battery_capacity = self.get_parameter("BATT_CAPACITY")
+        if param_battery_capacity is None:
+            raise NotAchievedException("Cannot read BATT_CAPACITY parameter")
+        self.progress("validate_params: BATT_CAPACITY param==%f frsky==%f param_id=%u" % (param_battery_capacity, battery_capacity, param_id))
+        if param_battery_capacity == battery_capacity:
             return True
             # FIXME: need to check other values as well
         return False
@@ -9035,24 +9030,16 @@ switch value'''
         old_data = None
         text = ""
         sent_request = False
+        target_text = self.mav.recv_match(
+            type='STATUSTEXT',
+            blocking=True,
+            timeout=10
+        )
+        self.progress("Got STATUSTEXT: %s, waiting for same text from frsky" % target_text.text)
         while True:
             now = self.get_sim_time()
             if now - tstart > 60: # it can take a *long* time to get these messages down!
                 raise NotAchievedException("Did not get statustext in time")
-            if now - tstart > 30 and not sent_request:
-                # have to wait this long or our message gets squelched....
-                sent_request = True
-#                                self.mavproxy.send("param fetch\n")
-                self.run_cmd(
-                    mavutil.mavlink.MAV_CMD_PREFLIGHT_CALIBRATION,
-                    0, # p1
-                    0, # p2
-                    1, # p3, baro
-                    0, # p4
-                    0, # p5
-                    0, # p6
-                    0, # p7
-                )
             frsky.update()
             data = frsky.get_data(0x5000) # no timestamping on this data, so we can't catch legitimate repeats.
             if data is None:
@@ -9074,9 +9061,9 @@ switch value'''
                 if (x & 0x7f) == 0x00:
                     last = True
             if last:
-                m = re.match("Updating barometer calibration", text)
+                m = re.match(target_text.text, text)
                 if m is not None:
-                    want_sev = mavutil.mavlink.MAV_SEVERITY_INFO
+                    want_sev = target_text.severity
                     if severity != want_sev:
                         raise NotAchievedException("Incorrect severity; want=%u got=%u" % (want_sev, severity))
                     self.progress("Got statustext (%s)" % m.group(0))
