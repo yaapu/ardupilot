@@ -24,10 +24,12 @@ for FrSky SPort Passthrough
 #define PARAM_VALUE_LIMIT           0xFFFFFF
 // for gps status data
 #define GPS_SATS_LIMIT              0xF
+#define GPS_EXTENDED_SATS_LIMIT     0x1F
 #define GPS_STATUS_LIMIT            0x3
 #define GPS_STATUS_OFFSET           4
 #define GPS_HDOP_OFFSET             6
 #define GPS_ADVSTATUS_OFFSET        14
+#define GPS_EXTENDED_SATS_OFFSET    16
 #define GPS_ALTMSL_OFFSET           22
 // for battery data
 #define BATT_VOLTAGE_LIMIT          0x1FF
@@ -440,6 +442,8 @@ uint32_t AP_Frsky_SPort_Passthrough::calc_gps_status(void)
     gps_status |= prep_number(roundf(gps.get_hdop() * 0.1f),2,1)<<GPS_HDOP_OFFSET;
     // GPS receiver advanced status (0: no advanced fix, 1: GPS_OK_FIX_3D_DGPS, 2: GPS_OK_FIX_3D_RTK_FLOAT, 3: GPS_OK_FIX_3D_RTK_FIXED)
     gps_status |= ((gps.status() > GPS_STATUS_LIMIT) ? gps.status()-GPS_STATUS_LIMIT : 0)<<GPS_ADVSTATUS_OFFSET;
+    // number of "extra" GPS satellites visible when num_sats() is > 15, this was added to extend the original limit of 15 sats
+    gps_status |= MIN(GPS_EXTENDED_SATS_LIMIT, gps.num_sats() > GPS_SATS_LIMIT ? gps.num_sats() - GPS_SATS_LIMIT : 0)<<GPS_EXTENDED_SATS_OFFSET;
     // Altitude MSL in dm
     const Location &loc = gps.location();
     gps_status |= prep_number(roundf(loc.alt * 0.1f),2,2)<<GPS_ALTMSL_OFFSET;
