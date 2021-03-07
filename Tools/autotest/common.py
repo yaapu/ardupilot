@@ -868,6 +868,7 @@ class FRSkySPort(FRSky):
             0x5003: "Battery 1 status",
             0x5007: "parameters",
             0x500A: "rpm",
+            0x500B: "terrain",
 
             # SPort non-passthrough:
             0x01: "GPS_ALT_BP",
@@ -9295,6 +9296,26 @@ switch value'''
             return False
         return True
 
+    def tfp_validate_terrain(self, value):
+        self.progress("validating terrain(0x%02x)" % value)
+        alt_above_terrain_dm = self.bit_extract(value, 2, 10) * (10 ^ self.bit_extract(value, 0, 2)) * 0.1 * (self.bit_extract(value, 12, 1) == 1 and -1 or 1)  # noqa
+        # ALTITUDE is not part of any stream so we need to request it
+        self.set_message_rate_hz(mavutil.mavlink.MAVLINK_MSG_ID_ALTITUDE, 2)
+        alt = self.mav.recv_match(
+            type='ALTITUDE',
+            blocking=True,
+            timeout=1
+        )
+        # ok done, we do not need any more ALTITUDE messages
+        self.set_message_rate_hz(mavutil.mavlink.MAVLINK_MSG_ID_ALTITUDE, -1)
+        if alt is None:
+            raise NotAchievedException("Did not get ALTITUDE message")
+        altitude_terrain_dm = round(alt.altitude_terrain*10)
+        self.progress("ALTITUDE terrain_alt==%fdm frsky_terrain_alt==%fdm" % (altitude_terrain_dm, alt_above_terrain_dm))
+        if abs(altitude_terrain_dm - alt_above_terrain_dm) < 1:
+            return True
+        return False
+
     def test_frsky_passthrough_do_wants(self, frsky, wants):
 
         tstart = self.get_sim_time_cached()
@@ -9397,6 +9418,7 @@ switch value'''
             # 0x5008: lambda x : True, # no second battery, so this doesn't arrive
             0x5003: self.tfp_validate_battery1,
             0x5007: self.tfp_validate_params,
+            0x500B: self.tfp_validate_terrain,
         }
         self.test_frsky_passthrough_do_wants(frsky, wants)
 
