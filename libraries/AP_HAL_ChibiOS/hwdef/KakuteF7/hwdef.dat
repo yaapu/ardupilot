@@ -161,12 +161,20 @@ define HAL_SPRAYER_ENABLED 0
 define HAL_MSP_ENABLED 1
 
 # enable CRSF
-define HAL_CRSF_ENABLED 1
-define HAL_CRSF_TELEM_ENABLED 1
-define HAL_CRSF_TELEM_TEXT_SELECTION_ENABLED 1
+define HAL_CRSF_ENABLED 0
+#define HAL_CRSF_TELEM_ENABLED 1
+#define HAL_CRSF_TELEM_TEXT_SELECTION_ENABLED 1
+
+# save some more
+define HAL_MOUNT_ENABLED 0
+define HAL_RUNCAM_ENABLED 0
+define GENERATOR_ENABLED 0
+define SMARTAUDIO_ENABLED 0
+define HAL_SPEKTRUM_TELEM_ENABLED 0
+define HAL_HOTT_TELEM_ENABLED 0
 
 # save FLASH, but leave above when flash issue is fixed
-define HAL_MINIMIZE_FEATURES 1
+define HAL_MINIMIZE_FEATURES 0
 
 # reduce max size of embedded params for apj_tool.py
 define AP_PARAM_MAX_EMBEDDED_PARAM 1024
