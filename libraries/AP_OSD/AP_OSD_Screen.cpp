@@ -35,6 +35,7 @@
 #include <AP_GPS/AP_GPS.h>
 #include <AP_Baro/AP_Baro.h>
 #include <AP_RTC/AP_RTC.h>
+#include <AP_RPM/AP_RPM.h>
 #include <AP_MSP/msp.h>
 #include <AP_OLC/AP_OLC.h>
 #include <AP_VideoTX/AP_VideoTX.h>
@@ -993,6 +994,38 @@ const AP_Param::GroupInfo AP_OSD_Screen::var_info[] = {
     // @Description: Vertical position on screen
     // @Range: 0 15
     AP_SUBGROUPINFO(rngf, "RNGF", 60, AP_OSD_Screen, AP_OSD_Setting),
+
+    // @Param: RPM1_EN
+    // @DisplayName: RPM1_EN
+    // @Description: Displays rpm sensor 1
+    // @Values: 0:Disabled,1:Enabled
+
+    // @Param: RPM1_X
+    // @DisplayName: RPM1_X
+    // @Description: Horizontal position on screen
+    // @Range: 0 29
+
+    // @Param: RPM1_Y
+    // @DisplayName: RPM1_Y
+    // @Description: Vertical position on screen
+    // @Range: 0 15
+    AP_SUBGROUPINFO(rpm1, "RPM1", 61, AP_OSD_Screen, AP_OSD_Setting),
+
+    // @Param: RPM2_EN
+    // @DisplayName: RPM2_EN
+    // @Description: Displays rpm sensor 2
+    // @Values: 0:Disabled,1:Enabled
+
+    // @Param: RPM2_X
+    // @DisplayName: RPM2_X
+    // @Description: Horizontal position on screen
+    // @Range: 0 29
+
+    // @Param: RPM2_Y
+    // @DisplayName: RPM2_Y
+    // @Description: Vertical position on screen
+    // @Range: 0 15
+    AP_SUBGROUPINFO(rpm2, "RPM2", 62, AP_OSD_Screen, AP_OSD_Setting),
     AP_GROUPEND
 };
 
@@ -1240,7 +1273,7 @@ void AP_OSD_Screen::draw_avgcellvolt(uint8_t x, uint8_t y)
     // calculate cell count - WARNING this can be inaccurate if the LIPO/LIION  battery is far from fully charged when attached and is used in this panel
     osd->max_battery_voltage = MAX(osd->max_battery_voltage,v);
     if (osd->cell_count > 0) {
-        v = v / osd->cell_count;  
+        v = v / osd->cell_count;
         backend->write(x,y, v < osd->warn_avgcellvolt, "%c%1.2f%c", SYM_BATT_FULL + p, v, SYM_VOLT);
     } else if (osd->cell_count < 0) { // user must decide on autodetect cell count or manually entered to display this panel since default is -1
         backend->write(x,y, false, "%c---%c", SYM_BATT_FULL + p, SYM_VOLT);
@@ -2000,6 +2033,34 @@ void AP_OSD_Screen::draw_rngf(uint8_t x, uint8_t y)
     }
 }
 
+void AP_OSD_Screen::draw_rpm1(uint8_t x, uint8_t y)
+{
+    draw_rpm(x,y,0);
+}
+
+void AP_OSD_Screen::draw_rpm2(uint8_t x, uint8_t y)
+{
+    draw_rpm(x,y,1);
+}
+
+void AP_OSD_Screen::draw_rpm(uint8_t x, uint8_t y, uint8_t instance)
+{
+    if (instance > 1) {
+        return;
+    }
+    const AP_RPM *ap_rpm = AP::rpm();
+    if (ap_rpm == nullptr) {
+        return;
+    }
+    float rpm;
+    if (!ap_rpm->get_rpm(instance,rpm)) {
+        return;
+    }
+    float krpm = rpm * 0.001f;
+    const char *format = krpm < 9.995 ? "%.2f%c%c" : (krpm < 99.95 ? "%.1f%c%c" : "%.0f%c%c");
+    backend->write(x, y, false, format, krpm, SYM_KILO, SYM_RPM);
+}
+
 #define DRAW_SETTING(n) if (n.enabled) draw_ ## n(n.xpos, n.ypos)
 
 #if HAL_WITH_OSD_BITMAP
@@ -2071,6 +2132,8 @@ void AP_OSD_Screen::draw(void)
     DRAW_SETTING(eff);
     DRAW_SETTING(callsign);
     DRAW_SETTING(current2);
+    DRAW_SETTING(rpm1);
+    DRAW_SETTING(rpm2);
 }
 #endif
 #endif // OSD_ENABLED

@@ -184,6 +184,8 @@ private:
     AP_OSD_Setting hgt_abvterr{false, 23, 7};
     AP_OSD_Setting fence{false, 14, 9};
     AP_OSD_Setting rngf{false, 0, 0};
+    AP_OSD_Setting rpm1{false, 0, 0};
+    AP_OSD_Setting rpm2{false, 0, 0};
 #if HAL_PLUSCODE_ENABLE
     AP_OSD_Setting pluscode{false, 0, 0};
 #endif
@@ -227,6 +229,7 @@ private:
     //helper functions
     void draw_speed(uint8_t x, uint8_t y, float angle_rad, float magnitude);
     void draw_distance(uint8_t x, uint8_t y, float distance);
+    void draw_rpm(uint8_t x, uint8_t y, uint8_t instance);
 #if HAL_WITH_ESC_TELEM
     void draw_blh_temp(uint8_t x, uint8_t y);
     void draw_blh_rpm(uint8_t x, uint8_t y);
@@ -256,6 +259,8 @@ private:
     void draw_hgt_abvterr(uint8_t x, uint8_t y);
     void draw_fence(uint8_t x, uint8_t y);
     void draw_rngf(uint8_t x, uint8_t y);
+    void draw_rpm1(uint8_t x, uint8_t y);
+    void draw_rpm2(uint8_t x, uint8_t y);
 
 
     struct {
