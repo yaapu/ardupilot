@@ -36,7 +36,10 @@ class AP_MSP
     friend class AP_MSP_Telem_Generic;
     friend class AP_MSP_Telem_DJI;
     friend class AP_MSP_Telem_Backend;
-
+#if HAL_WITH_MSP_DISPLAYPORT
+    friend class AP_MSP_Telem_DisplayPort;
+    friend class AP_OSD_MSP_DisplayPort;
+#endif
 public:
     AP_MSP();
 
@@ -83,6 +86,7 @@ private:
     void init_osd();
     void loop(void);
     bool check_option(const msp_option_e option);
+    AP_MSP_Telem_Backend* find_protocol(const AP_SerialManager::SerialProtocol protocol) const;
 
     static AP_MSP *_singleton;
 };
