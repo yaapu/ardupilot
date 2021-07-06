@@ -10,6 +10,7 @@
 #include <AP_RPM/AP_RPM.h>
 #include <AP_Terrain/AP_Terrain.h>
 #include <AC_Fence/AC_Fence.h>
+#include <AP_Vehicle/AP_Vehicle.h>
 #include <GCS_MAVLink/GCS.h>
 
 #if HAL_WITH_FRSKY_TELEM_BIDIRECTIONAL
@@ -67,6 +68,13 @@ for FrSky SPort Passthrough
 #define ATTIANDRNG_RNGFND_OFFSET    21
 // for terrain data
 #define TERRAIN_UNHEALTHY_OFFSET    13
+// for waypoint data
+#define WP_NUMBER_LIMIT             2047
+#define WP_DISTANCE_LIMIT           1023000
+#define WP_DISTANCE_OFFSET          11
+#define WP_BEARING_COG_OFFSET       23
+#define WP_COG_FLAG_OFFSET          30
+
 extern const AP_HAL::HAL& hal;
 
 AP_Frsky_SPort_Passthrough *AP_Frsky_SPort_Passthrough::singleton;
@@ -121,6 +129,7 @@ void AP_Frsky_SPort_Passthrough::setup_wfq_scheduler(void)
     set_scheduler_entry(PARAM, 1700, 1000);     // 0x5007 parameters
     set_scheduler_entry(RPM, 300, 330);         // 0x500A rpm sensors 1 and 2
     set_scheduler_entry(TERRAIN, 700, 500);     // 0x500B terrain data
+    set_scheduler_entry(WAYPOINT, 750, 500);    // 0x500D terrain data
     set_scheduler_entry(UDATA, 5000, 200);      // user data
 
     // initialize default sport sensor ID
@@ -221,6 +230,12 @@ bool AP_Frsky_SPort_Passthrough::is_packet_ready(uint8_t idx, bool queue_empty)
 #endif
         }
         break;
+    case WAYPOINT:
+        {
+            const AP_Mission *mission = AP::mission();
+            packet_ready = mission != nullptr && mission->get_current_nav_index() > 0;
+        }
+        break;
     case UDATA:
         // when using fport user data is sent by scheduler
         // when using sport user data is sent responding to custom polling
@@ -292,6 +307,9 @@ void AP_Frsky_SPort_Passthrough::process_packet(uint8_t idx)
         break;
     case TERRAIN: // 0x500B terrain data
         send_sport_frame(SPORT_DATA_FRAME, DIY_FIRST_ID+0x0B, calc_terrain());
+        break;
+    case WAYPOINT: // 0x500D waypoint data
+        send_sport_frame(SPORT_DATA_FRAME, DIY_FIRST_ID+0x0D, calc_waypoint());
         break;
     case UDATA: // user data
         {
@@ -690,6 +708,39 @@ uint32_t AP_Frsky_SPort_Passthrough::calc_terrain(void)
     // terrain unhealthy flag
     value |= (uint8_t)(terrain->status() == AP_Terrain::TerrainStatus::TerrainStatusUnhealthy) << TERRAIN_UNHEALTHY_OFFSET;
 #endif
+    return value;
+}
+
+/*
+ * prepare waypoint data
+ * for FrSky SPort Passthrough (OpenTX) protocol (X-receivers)
+ */
+uint32_t AP_Frsky_SPort_Passthrough::calc_waypoint(void)
+{
+    const AP_Mission *mission = AP::mission();
+    const AP_Vehicle *vehicle = AP::vehicle();
+    if (mission == nullptr || vehicle == nullptr) {
+        return 0U;
+    }
+    float wp_distance;
+    if (!vehicle->get_wp_distance_m(wp_distance)) {
+        return 0U;
+    }
+    float angle = AP::gps().ground_course();
+    if (_passthrough.send_wp_bearing) {
+        if (!vehicle->get_wp_bearing_deg(angle)) {
+            return 0U;
+        }
+    }
+    // waypoint current nav index
+    uint32_t value = MIN(mission->get_current_nav_index(), WP_NUMBER_LIMIT);
+    // distance to next waypoint
+    value |= prep_number(wp_distance, 3, 2) << WP_DISTANCE_OFFSET;
+    // bearing or cog encoded in 3 degrees increments
+    value |= ((uint8_t)roundf(wrap_360(angle) * 0.333f)) << WP_BEARING_COG_OFFSET;
+    // alternate waypoint bearing/cog flag
+    value |= (_passthrough.send_wp_bearing?1:0) << WP_COG_FLAG_OFFSET;
+    _passthrough.send_wp_bearing = !_passthrough.send_wp_bearing;
     return value;
 }
 

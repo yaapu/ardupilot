@@ -29,9 +29,10 @@ protected:
 
     void send_sport_frame(uint8_t frame, uint16_t appid, uint32_t data);
 
-    struct PACKED {
-        bool send_latitude; // sizeof(bool) = 4 ?
-        bool send_airspeed; // toggles 0x5005 between airspeed and groundspeed
+    struct {
+        bool send_latitude;
+        bool send_airspeed;     // toggles 0x5005 between airspeed and groundspeed
+        bool send_wp_bearing;   // toggles 0x500d between waypoint bearing and cog
         uint32_t gps_lng_sample;
         uint8_t new_byte;
     } _passthrough;
