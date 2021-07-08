@@ -36,7 +36,7 @@ bool AP_MSP_Telem_DJI::init_uart()
 
 bool AP_MSP_Telem_DJI::is_scheduler_enabled() const
 {
-    AP_MSP *msp = AP::msp();
+    const AP_MSP *msp = AP::msp();
     if (msp == nullptr) {
         return false;
     }
@@ -45,7 +45,7 @@ bool AP_MSP_Telem_DJI::is_scheduler_enabled() const
 
 void AP_MSP_Telem_DJI::hide_osd_items(void)
 {
-    AP_MSP *msp = AP::msp();
+    const AP_MSP *msp = AP::msp();
     if (msp == nullptr) {
         return;
     }

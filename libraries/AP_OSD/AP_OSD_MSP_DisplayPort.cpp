@@ -35,7 +35,7 @@ constexpr uint8_t AP_OSD_MSP_DisplayPort::symbols[AP_OSD_NUM_SYMBOLS];
 bool AP_OSD_MSP_DisplayPort::init(void)
 {
     // check if we have a DisplayPort backend to use
-    AP_MSP *msp = AP::msp();
+    const AP_MSP *msp = AP::msp();
     if (msp == nullptr) {
         gcs().send_text(MAV_SEVERITY_WARNING,"MSP backend not available");
         return false;
