@@ -1690,7 +1690,7 @@ void AP_OSD_Screen::draw_esc_amps(uint8_t x, uint8_t y)
     if (!AP::esc_telem().get_current(0, amps)) {
         return;
     }
-    backend->write(x, y, false, "%4.1f%c", esc_amps, SYMBOL(SYM_AMP));
+    backend->write(x, y, false, "%4.1f%c", amps, SYMBOL(SYM_AMP));
 }
 #endif
 

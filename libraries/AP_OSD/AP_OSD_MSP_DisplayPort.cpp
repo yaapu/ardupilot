@@ -96,7 +96,16 @@ void AP_OSD_MSP_DisplayPort::flush(void)
 
 void AP_OSD_MSP_DisplayPort::init_symbol_set(uint8_t *lookup_table, const uint8_t size)
 {
-    memcpy(lookup_table, symbols, size);
+    const AP_MSP *msp = AP::msp();
+    if (msp == nullptr) {
+        return;
+    }
+    // do we use backend specific symbols table?
+    if (msp->check_option(AP_MSP::MspOption::OPTION_DISPLAYPORT_DEFAULT_SYMBOLS)) {
+        memcpy(lookup_table, AP_OSD_Backend::symbols, size);
+    } else {
+        memcpy(lookup_table, symbols, size);
+    }
 }
 
 // override built in positions with defaults for MSP OSD
