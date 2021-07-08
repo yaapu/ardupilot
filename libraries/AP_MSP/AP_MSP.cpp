@@ -45,7 +45,7 @@ const AP_Param::GroupInfo AP_MSP::var_info[] = {
     // @Description: A bitmask to set some MSP specific options
     // @Bitmask: 0:EnableTelemetryMode, 1: DJIWorkarounds
     // @User: Standard
-    AP_GROUPINFO("_OPTIONS", 2, AP_MSP, _options, OPTION_TELEMETRY_DJI_WORKAROUNDS),
+    AP_GROUPINFO("_OPTIONS", 2, AP_MSP, _options, (uint8_t)MspOption::OPTION_TELEMETRY_DJI_WORKAROUNDS),
 
     AP_GROUPEND
 };
@@ -222,11 +222,6 @@ void AP_MSP::loop(void)
             }
         }
     }
-}
-
-bool AP_MSP::check_option(msp_option_e option)
-{
-    return (_options & option) != 0;
 }
 
 AP_MSP_Telem_Backend* AP_MSP::find_protocol(const AP_SerialManager::SerialProtocol protocol) const {

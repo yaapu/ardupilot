@@ -40,7 +40,7 @@ bool AP_MSP_Telem_DJI::is_scheduler_enabled() const
     if (msp == nullptr) {
         return false;
     }
-    return msp->check_option(AP_MSP::OPTION_TELEMETRY_MODE);
+    return msp->check_option(AP_MSP::MspOption::OPTION_TELEMETRY_MODE);
 }
 
 void AP_MSP_Telem_DJI::hide_osd_items(void)
@@ -124,7 +124,7 @@ MSPCommandResult AP_MSP_Telem_DJI::msp_process_out_esc_sensor_data(sbuf_t *dst)
 {
 #if HAL_WITH_ESC_TELEM
     const auto msp = AP::msp();
-    if (msp && (msp->_options & AP_MSP::OPTION_TELEMETRY_DJI_WORKAROUNDS)) {
+    if (msp && msp->check_option(AP_MSP::MspOption::OPTION_TELEMETRY_DJI_WORKAROUNDS)) {
         AP_ESC_Telem& telem = AP::esc_telem();
         int16_t highest_temperature = 0;
         telem.get_highest_motor_temperature(highest_temperature);
