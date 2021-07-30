@@ -291,6 +291,7 @@ bool AP_CRSF_Telem::is_packet_ready(uint8_t idx, bool queue_empty)
 
     switch (idx) {
     case PARAMETERS:
+        hal.console->printf("CRSF: params\n");
         // to get crossfire firmware version we send an RX device ping until we get a response
         // but only if there are no other requests pending
         if (_crsf_version.pending && _pending_request.frame_type == 0) {
@@ -307,12 +308,16 @@ bool AP_CRSF_Telem::is_packet_ready(uint8_t idx, bool queue_empty)
         }
         return _pending_request.frame_type > 0;
     case VTX_PARAMETERS:
+        hal.console->printf("CRSF: vtx params\n");
         return AP::vtx().have_params_changed() ||_vtx_power_change_pending || _vtx_freq_change_pending || _vtx_options_change_pending;
     case PASSTHROUGH:
+        hal.console->printf("CRSF: passthrough\n");
         return rc().crsf_custom_telemetry();
     case STATUS_TEXT:
+        hal.console->printf("CRSF: status text\n");
         return rc().crsf_custom_telemetry() && !queue_empty;
     default:
+        hal.console->printf("CRSF: default\n");
         return _enable_telemetry;
     }
 }
