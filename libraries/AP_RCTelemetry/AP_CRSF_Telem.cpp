@@ -162,6 +162,11 @@ void AP_CRSF_Telem::process_rf_mode_changes()
     if (_telem_last_report_ms == 0 && !uart->is_dma_enabled()) {
         gcs().send_text(MAV_SEVERITY_WARNING, "CRSF: running on non-DMA serial port");
     }
+    // warn if frsky passthrough telemetry provider is shared
+    const int8_t frsky_port = AP::serialmanager().find_portnum(AP_SerialManager::SerialProtocol_FrSky_SPort_Passthrough,0); 
+    if (_telem_last_report_ms == 0 && frsky_port != -1) {
+        gcs().send_text(MAV_SEVERITY_WARNING, "CRSF: passthrough telemetry conflict on SERIAL%d",frsky_port);
+    }
     // report a change in RF mode or a chnage of more than 10Hz if we haven't done so in the last 5s
     if ((now - _telem_last_report_ms > 5000) &&
         (_telem_rf_mode != current_rf_mode || abs(int16_t(_telem_last_avg_rate) - int16_t(_scheduler.avg_packet_rate)) > 25)) {
