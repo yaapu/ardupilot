@@ -138,7 +138,7 @@ bool GCS_MAVLINK::init(uint8_t instance)
     }
     // since tcdrain() and TCSADRAIN may not be implemented...
     hal.scheduler->delay(1);
-    
+
     _port->set_flow_control(old_flow_control);
 
     // now change back to desired baudrate
@@ -151,7 +151,7 @@ bool GCS_MAVLINK::init(uint8_t instance)
     if (status == nullptr) {
         return false;
     }
-    
+
     if (mavlink_protocol == AP_SerialManager::SerialProtocol_MAVLink2) {
         // load signing key
         load_signing_key();
@@ -1430,7 +1430,7 @@ GCS_MAVLINK::update_receive(uint32_t max_time_us)
     {
         const uint8_t c = (uint8_t)_port->read();
         const uint32_t protocol_timeout = 4000;
-        
+
         if (alternative.handler &&
             now_ms - alternative.last_mavlink_ms > protocol_timeout) {
             /*
@@ -1442,7 +1442,7 @@ GCS_MAVLINK::update_receive(uint32_t max_time_us)
                 alternative.last_alternate_ms = now_ms;
                 gcs_alternative_active[chan] = true;
             }
-            
+
             /*
               we may also try parsing as MAVLink if we haven't had a
               successful parse on the alternative protocol for 4s
@@ -2647,7 +2647,7 @@ void GCS_MAVLINK::send_servo_output_raw()
         if (values[i] == 65535) {
             values[i] = 0;
         }
-    }    
+    }
     mavlink_msg_servo_output_raw_send(
             chan,
             AP_HAL::micros(),
@@ -2718,7 +2718,7 @@ void GCS_MAVLINK::send_vfr_hud()
 }
 
 /*
-  handle a MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN command 
+  handle a MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN command
 
   Optionally disable PX4IO overrides. This is done for quadplanes to
   prevent the mixer running while rebooting which can start the VTOL
@@ -2951,6 +2951,11 @@ void GCS_MAVLINK::handle_statustext(const mavlink_message_t &msg) const
 
     memcpy(&text[offset], packet.text, MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN);
 
+    AP_Frsky_Telem *frsky = AP::frsky_telem();
+    if (frsky != nullptr) {
+        frsky->queue_message(MAV_SEVERITY(packet.severity), text);
+    }
+
     logger->Write_Message(text);
 }
 
@@ -3179,7 +3184,7 @@ void GCS_MAVLINK::handle_att_pos_mocap(const mavlink_message_t &msg)
 
     // correct offboard timestamp to be in local ms since boot
     uint32_t timestamp_ms = correct_offboard_timestamp_usec_to_ms(m.time_usec, PAYLOAD_SIZE(chan, ATT_POS_MOCAP));
-   
+
     AP_VisualOdom *visual_odom = AP::visualodom();
     if (visual_odom == nullptr) {
         return;
@@ -3491,7 +3496,7 @@ void GCS_MAVLINK::handle_common_message(const mavlink_message_t &msg)
 
     case MAVLINK_MSG_ID_DATA96:
         handle_data_packet(msg);
-        break;        
+        break;
 
     case MAVLINK_MSG_ID_VISION_POSITION_DELTA:
         handle_vision_position_delta(msg);
@@ -3536,7 +3541,7 @@ void GCS_MAVLINK::handle_common_message(const mavlink_message_t &msg)
     case MAVLINK_MSG_ID_OBSTACLE_DISTANCE:
         handle_obstacle_distance(msg);
         break;
-    
+
     case MAVLINK_MSG_ID_OBSTACLE_DISTANCE_3D:
         handle_obstacle_distance_3d(msg);
         break;
@@ -3804,7 +3809,7 @@ MAV_RESULT GCS_MAVLINK::_handle_command_preflight_calibration(const mavlink_comm
         AP::compass().force_save_calibration();
         ret = MAV_RESULT_ACCEPTED;
     }
-    
+
     return ret;
 }
 
@@ -4295,7 +4300,7 @@ MAV_RESULT GCS_MAVLINK::handle_command_long_packet(const mavlink_command_long_t 
     case MAV_CMD_FIXED_MAG_CAL_YAW:
         result = handle_fixed_mag_cal_yaw(packet);
         break;
-        
+
     default:
         result = MAV_RESULT_UNSUPPORTED;
         break;
@@ -5029,7 +5034,7 @@ bool GCS_MAVLINK::try_send_message(const enum ap_message id)
         send_mcu_status();
 #endif
         break;
-        
+
     case MSG_RC_CHANNELS:
         CHECK_PAYLOAD_SIZE(RC_CHANNELS);
         send_rc_channels();
@@ -5485,7 +5490,7 @@ uint64_t GCS_MAVLINK::capabilities() const
     if (!AP_BoardConfig::ftp_disabled()){  //if ftp disable board option is not set
         ret |= MAV_PROTOCOL_CAPABILITY_FTP;
     }
- 
+
     return ret;
 }
 
@@ -5570,39 +5575,39 @@ void GCS_MAVLINK::send_high_latency() const
     if (!(health & MAV_SYS_STATUS_SENSOR_DIFFERENTIAL_PRESSURE))
     {
         failure_flags |= HL_FAILURE_FLAG_DIFFERENTIAL_PRESSURE;
-    }    
+    }
     if (!(health & MAV_SYS_STATUS_SENSOR_ABSOLUTE_PRESSURE))
     {
         failure_flags |= HL_FAILURE_FLAG_ABSOLUTE_PRESSURE;
-    }    
+    }
     if (!(health & MAV_SYS_STATUS_SENSOR_3D_ACCEL))
     {
         failure_flags |= HL_FAILURE_FLAG_3D_ACCEL;
-    }  
+    }
     if (!(health & MAV_SYS_STATUS_SENSOR_3D_GYRO))
     {
         failure_flags |= HL_FAILURE_FLAG_3D_GYRO;
-    }  
+    }
     if (!(health & MAV_SYS_STATUS_SENSOR_3D_MAG))
     {
         failure_flags |= HL_FAILURE_FLAG_3D_MAG;
-    }  
+    }
     if (!(health & MAV_SYS_STATUS_TERRAIN))
     {
         failure_flags |= HL_FAILURE_FLAG_TERRAIN;
-    }  
+    }
     if (!(health & MAV_SYS_STATUS_SENSOR_BATTERY))
     {
         failure_flags |= HL_FAILURE_FLAG_BATTERY;
-    }  
+    }
     if (!(health & MAV_SYS_STATUS_SENSOR_RC_RECEIVER))
     {
         failure_flags |= HL_FAILURE_FLAG_RC_RECEIVER;
-    }  
+    }
     if (!(health & MAV_SYS_STATUS_GEOFENCE))
     {
         failure_flags |= HL_FAILURE_FLAG_GEOFENCE;
-    } 
+    }
     if (!(health & MAV_SYS_STATUS_AHRS))
     {
         failure_flags |= HL_FAILURE_FLAG_ESTIMATOR;
@@ -5610,7 +5615,7 @@ void GCS_MAVLINK::send_high_latency() const
 
     //send_text(MAV_SEVERITY_INFO, "Yaw: %u", (((uint16_t)ahrs.yaw_sensor / 100) % 360));
 
-    mavlink_msg_high_latency2_send(chan, 
+    mavlink_msg_high_latency2_send(chan,
         AP_HAL::millis(), //[ms] Timestamp (milliseconds since boot or Unix epoch)
         gcs().frame_type(), // Type of the MAV (quadrotor, helicopter, etc.)
         MAV_AUTOPILOT_ARDUPILOTMEGA, // Autopilot type / class. Use MAV_AUTOPILOT_INVALID for components that are not flight controllers.
