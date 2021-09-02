@@ -37,8 +37,49 @@
 
 extern const AP_HAL::HAL& hal;
 
-AP_Frsky_Telem::AP_Frsky_Telem(void)
+AP_Frsky_Telem *AP_Frsky_Telem::singleton;
+
+AP_Frsky_Telem::AP_Frsky_Telem(bool _external_data) :
+    use_external_data(_external_data)
 {
+    singleton = this;
+}
+
+AP_Frsky_Telem::~AP_Frsky_Telem(void)
+{
+    singleton = nullptr;
+}
+
+/*
+  setup ready for passthrough telem
+ */
+void AP_Frsky_Telem::setup_passthrough(void)
+{
+    // make frsky_telemetry available to GCS_MAVLINK (used to queue statustext messages from GCS_MAVLINK)
+    // add firmware and frame info to message queue
+    const char* _frame_string = gcs().frame_string();
+    if (_frame_string == nullptr) {
+        queue_message(MAV_SEVERITY_INFO, AP::fwversion().fw_string);
+    } else {
+        char firmware_buf[MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN+1];
+        snprintf(firmware_buf, sizeof(firmware_buf), "%s %s", AP::fwversion().fw_string, _frame_string);
+        queue_message(MAV_SEVERITY_INFO, firmware_buf);
+    }
+
+    // initialize packet weights for the WFQ scheduler
+    // weight[i] = 1/_passthrough.packet_period[i]
+    // rate[i] = LinkRate * ( weight[i] / (sum(weight[1-n])) )
+    _passthrough.packet_weight[0] = 35;   // 0x5000 status text (dynamic)
+    _passthrough.packet_weight[1] = 50;   // 0x5006 Attitude and range (dynamic)
+    _passthrough.packet_weight[2] = 550;   // 0x800 GPS lat (600 with 1 sensor)
+    _passthrough.packet_weight[3] = 550;   // 0x800 GPS lon (600 with 1 sensor)
+    _passthrough.packet_weight[4] = 400;   // 0x5005 Vel and Yaw
+    _passthrough.packet_weight[5] = 700;   // 0x5001 AP status
+    _passthrough.packet_weight[6] = 700;   // 0x5002 GPS Status
+    _passthrough.packet_weight[7] = 400;   // 0x5004 Home
+    _passthrough.packet_weight[8] = 1300;  // 0x5008 Battery 2 status
+    _passthrough.packet_weight[9] = 1300;  // 0x5003 Battery 1 status
+    _passthrough.packet_weight[10] = 1700; // 0x5007 parameters
 }
 
 /*
@@ -55,33 +96,9 @@ bool AP_Frsky_Telem::init()
         _protocol = AP_SerialManager::SerialProtocol_FrSky_SPort; // FrSky SPort protocol (X-receivers)
     } else if ((_port = serial_manager.find_serial(AP_SerialManager::SerialProtocol_FrSky_SPort_Passthrough, 0))) {
         _protocol = AP_SerialManager::SerialProtocol_FrSky_SPort_Passthrough; // FrSky SPort and SPort Passthrough (OpenTX) protocols (X-receivers)
-        // make frsky_telemetry available to GCS_MAVLINK (used to queue statustext messages from GCS_MAVLINK)
-        // add firmware and frame info to message queue
-        const char* _frame_string = gcs().frame_string();
-        if (_frame_string == nullptr) {
-            queue_message(MAV_SEVERITY_INFO, AP::fwversion().fw_string);
-        } else {
-            char firmware_buf[MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN+1];
-            snprintf(firmware_buf, sizeof(firmware_buf), "%s %s", AP::fwversion().fw_string, _frame_string);
-            queue_message(MAV_SEVERITY_INFO, firmware_buf);
-        }
-
-        // initialize packet weights for the WFQ scheduler
-        // weight[i] = 1/_passthrough.packet_period[i]
-        // rate[i] = LinkRate * ( weight[i] / (sum(weight[1-n])) )
-        _passthrough.packet_weight[0] = 35;   // 0x5000 status text (dynamic)
-        _passthrough.packet_weight[1] = 50;   // 0x5006 Attitude and range (dynamic)
-        _passthrough.packet_weight[2] = 550;   // 0x800 GPS lat (600 with 1 sensor)
-        _passthrough.packet_weight[3] = 550;   // 0x800 GPS lon (600 with 1 sensor)
-        _passthrough.packet_weight[4] = 400;   // 0x5005 Vel and Yaw
-        _passthrough.packet_weight[5] = 700;   // 0x5001 AP status
-        _passthrough.packet_weight[6] = 700;   // 0x5002 GPS Status
-        _passthrough.packet_weight[7] = 400;   // 0x5004 Home
-        _passthrough.packet_weight[8] = 1300;  // 0x5008 Battery 2 status
-        _passthrough.packet_weight[9] = 1300;  // 0x5003 Battery 1 status
-        _passthrough.packet_weight[10] = 1700; // 0x5007 parameters
+        setup_passthrough();
     }
-    
+
     if (_port != nullptr) {
         if (!hal.scheduler->thread_create(FUNCTOR_BIND_MEMBER(&AP_Frsky_Telem::loop, void),
                                           "FrSky",
@@ -503,6 +520,13 @@ void AP_Frsky_Telem::send_byte(uint8_t byte)
  */
 void  AP_Frsky_Telem::send_uint32(uint8_t frame, uint16_t id, uint32_t data)
 {
+    if (use_external_data) {
+        external_data.frame = frame;
+        external_data.appid = id;
+        external_data.data = data;
+        external_data.pending = true;
+        return;
+    }
     send_byte(frame); // frame type
     uint8_t *bytes = (uint8_t*)&id;
     send_byte(bytes[0]); // LSB
@@ -1073,3 +1097,41 @@ uint32_t AP_Frsky_Telem::sensor_status_flags() const
 
     return ~health & enabled & present;
 }
+
+/*
+  fetch Sport data for an external transport, such as FPort
+ */
+bool AP_Frsky_Telem::_get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data)
+{
+    passthrough_wfq_adaptive_scheduler(0);
+    if (!external_data.pending) {
+        return false;
+    }
+    frame = external_data.frame;
+    appid = external_data.appid;
+    data = external_data.data;
+    external_data.pending = false;
+    return true;
+}
+
+/*
+  fetch Sport data for an external transport, such as FPort
+ */
+bool AP_Frsky_Telem::get_telem_data(uint8_t &frame, uint16_t &appid, uint32_t &data)
+{
+    if (!singleton && !hal.util->get_soft_armed()) {
+        // if telem data is requested when we are disarmed and don't
+        // yet have a AP_Frsky_Telem object then try to allocate one
+        new AP_Frsky_Telem(true);
+    }
+    if (!singleton) {
+        return false;
+    }
+    return singleton->_get_telem_data(frame, appid, data);
+}
+
+namespace AP {
+    AP_Frsky_Telem *frsky_telem() {
+        return AP_Frsky_Telem::get_singleton();
+    }
+};
