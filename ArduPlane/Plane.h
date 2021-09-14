@@ -1151,6 +1151,8 @@ private:
     float pitch_in_expo(bool use_dz) const;
     float rudder_in_expo(bool use_dz) const;
 
+    bool air_mode_active() const override;
+
 public:
     void failsafe_check(void);
 #ifdef ENABLE_SCRIPTING

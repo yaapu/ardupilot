@@ -1,6 +1,6 @@
 /*
    Lead developer: Andrew Tridgell
- 
+
    Authors:    Doug Weibel, Jose Julio, Jordi Munoz, Jason Short, Randy Mackay, Pat Hickey, John Arne Birkeland, Olivier Adler, Amilcar Lucas, Gregory Fletcher, Paul Riseborough, Brandon Jones, Jon Challinger, Tom Pittenger
    Thanks to:  Chris Anderson, Michael Oborne, Paul Mather, Bill Premerlani, James Cohen, JB from rotorFX, Automatik, Fefenin, Peter Meister, Remzibi, Yury Smirnov, Sandro Benigno, Max Levine, Roberto Navoni, Lorenz Meier, Yury MonZon
 
@@ -98,7 +98,7 @@ const AP_Scheduler::Task Plane::scheduler_tasks[] = {
     SCHED_TASK_CLASS(AP_Logger, &plane.logger, periodic_tasks, 50, 400),
 #endif
     SCHED_TASK_CLASS(AP_InertialSensor, &plane.ins, periodic, 50, 50),
-#if HAL_ADSB_ENABLED    
+#if HAL_ADSB_ENABLED
     SCHED_TASK(avoidance_adsb_update,  10,    100),
 #endif
     SCHED_TASK_CLASS(RC_Channels,       (RC_Channels*)&plane.g2.rc_channels, read_aux_all,           10,    200),
@@ -219,7 +219,7 @@ void Plane::update_logging2(void)
         write_notch_log_messages();
 #endif
     }
-    
+
     if (should_log(MASK_LOG_NTUN)) {
         Log_Write_Nav_Tuning();
         Log_Write_Guided();
@@ -299,7 +299,7 @@ void Plane::one_second_loop()
         gps.status() >= AP_GPS::GPS_OK_FIX_3D) {
             last_home_update_ms = gps.last_message_time_ms();
             update_home();
-            
+
             // reset the landing altitude correction
             landing.alt_offset = 0;
     }
@@ -341,9 +341,9 @@ void Plane::airspeed_ratio_update(void)
         gps.status() < AP_GPS::GPS_OK_FIX_3D ||
         gps.ground_speed() < 4) {
         // don't calibrate when not moving
-        return;        
+        return;
     }
-    if (airspeed.get_airspeed() < aparm.airspeed_min && 
+    if (airspeed.get_airspeed() < aparm.airspeed_min &&
         gps.ground_speed() < (uint32_t)aparm.airspeed_min) {
         // don't calibrate when flying below the minimum airspeed. We
         // check both airspeed and ground speed to catch cases where
@@ -483,7 +483,7 @@ void Plane::update_alt()
     } else if (gps.status() >= AP_GPS::GPS_OK_FIX_3D && gps.have_vertical_velocity()) {
         sink_rate = gps.velocity().z;
     } else {
-        sink_rate = -barometer.get_climb_rate();        
+        sink_rate = -barometer.get_climb_rate();
     }
 
     // low pass the sink rate to take some of the noise out
@@ -708,5 +708,11 @@ void Plane::get_osd_roll_pitch_rad(float &roll, float &pitch) const
    }
 }
 #endif
+
+// returns true if air_mode is active
+bool Plane::air_mode_active() const
+{
+    return quadplane.air_mode_active();
+};
 
 AP_HAL_MAIN_CALLBACKS(&plane);

@@ -270,6 +270,9 @@ public:
     virtual void get_osd_roll_pitch_rad(float &roll, float &pitch) const;
 #endif
 
+    // returns true if air_mode is active
+    virtual bool air_mode_active() const { return false; };
+
 protected:
 
     virtual void init_ardupilot() = 0;
@@ -346,7 +349,7 @@ protected:
 #if HAL_EXTERNAL_AHRS_ENABLED
     AP_ExternalAHRS externalAHRS;
 #endif
-    
+
 #if HAL_SMARTAUDIO_ENABLED
     AP_SmartAudio smartaudio;
 #endif

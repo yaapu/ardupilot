@@ -699,6 +699,11 @@ bool Copter::get_wp_crosstrack_error_m(float &xtrack_error) const
     return true;
 }
 
+bool Copter::air_mode_active() const
+{
+    return copter.air_mode == AirMode::AIRMODE_ENABLED;
+}
+
 /*
   constructor for main Copter class
  */
