@@ -1140,5 +1140,24 @@ void AP_MSP_Telem_Backend::msp_displayport_write_string(uint8_t col, uint8_t row
 
     msp_send_packet(MSP_DISPLAYPORT, MSP::MSP_V1, &packet, 4 + len, false);
 }
+
+void AP_MSP_Telem_Backend::msp_displayport_select_font(uint8_t idx, uint8_t cols, uint8_t rows, uint32_t options)
+{
+    const struct PACKED {
+        uint8_t sub_cmd;
+        uint8_t index;
+        uint8_t cols;
+        uint8_t rows;
+        uint32_t options; //bitmask
+    } packet {
+        sub_cmd : msp_displayport_subcmd_e::MSP_DISPLAYPORT_SELECT_FONT,
+        index : idx,
+        cols: cols,
+        rows: rows,
+        options: options
+    };
+
+    msp_send_packet(MSP_DISPLAYPORT, MSP::MSP_V1, &packet, sizeof(packet), false);
+}
 #endif //HAL_WITH_MSP_DISPLAYPORT
 #endif //HAL_MSP_ENABLED
