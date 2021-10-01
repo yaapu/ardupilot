@@ -1,6 +1,8 @@
 #include <AP_Math/AP_Math.h>
 #include <AP_SerialManager/AP_SerialManager.h>
 
+extern const AP_HAL::HAL& hal;
+
 #include "msp.h"
 
 #include <stdint.h>
@@ -37,6 +39,32 @@ uint32_t MSP::msp_serial_send_frame(msp_port_t *msp, const uint8_t * hdr, uint32
         return 0;
     }
 
+#ifdef MSP_DEBUG_ENABLED
+    hal.console->printf("MSP: send hdr:");
+    for (uint8_t i = 0; i < hdr_len; i++) {
+        uint8_t val = ((uint8_t*)hdr)[i];
+        if (i < 3) {
+            hal.console->printf(" '%c'", (char)val);
+        } else {
+            hal.console->printf(" 0x%02X", val);
+        }
+    }
+    hal.console->printf(" data:");
+    for (uint8_t i = 0; i < data_len; i++) {
+        uint8_t val = ((uint8_t*)data)[i];
+        if (val >= 32 && val <= 126) {
+            hal.console->printf(" 0x%02X '%c'", val, (char)val);
+        } else {
+            hal.console->printf(" 0x%02X", val);
+        }
+    }
+    hal.console->printf(" crc:");
+    for (uint8_t i = 0; i < crc_len; i++) {
+        uint8_t val = ((uint8_t*)crc)[i];
+        hal.console->printf(" 0x%02X", val);
+    }
+    hal.console->printf("\n");
+#endif
     // Transmit frame
     msp->uart->write(hdr, hdr_len);
     msp->uart->write(data, data_len);
@@ -177,7 +205,12 @@ bool MSP::msp_parse_received_data(msp_port_t *msp, uint8_t c)
         break;
 
     case MSP_HEADER_M:      // Waiting for '<'
+#ifdef MSP_DEBUG_ENABLED
+        if (c == '<' || c == '>') {
+            msp->direction = c;
+#else
         if (c == '<') {
+#endif
             msp->offset = 0;
             msp->checksum1 = 0;
             msp->checksum2 = 0;
