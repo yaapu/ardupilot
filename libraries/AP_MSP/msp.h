@@ -48,6 +48,8 @@
 // betaflight/src/main/io/displayport_msp.c
 #define OSD_MSP_DISPLAYPORT_MAX_STRING_LENGTH 30
 
+#define MSP_DEBUG_ENABLED
+
 class AP_MSP_Telem_Backend;
 
 namespace MSP
@@ -132,6 +134,9 @@ typedef struct msp_port_s {
     uint16_t cmd_msp;
     uint8_t checksum1;
     uint8_t checksum2;
+#ifdef MSP_DEBUG_ENABLED
+    uint8_t direction;
+#endif
 } msp_port_t;
 
 // betaflight/src/main/sensors/battery.h

@@ -399,6 +399,30 @@ void AP_MSP_Telem_Backend::msp_process_received_command()
         .result = 0,
     };
 
+#ifdef MSP_DEBUG_ENABLED
+    hal.console->printf("MSP: recv hdr: '$'");
+    switch(_msp_port.msp_version) {
+        case MSP::MSP_V2_NATIVE:
+            hal.console->printf(" 'X' '%c' %02X %02X", _msp_port.direction, _msp_port.cmd_msp >> 8, _msp_port.cmd_msp & 0xFF);
+            break;
+        case MSP::MSP_V1:
+        case MSP::MSP_V2_OVER_V1:
+        default:
+            hal.console->printf(" 'M' '%c' %02X", _msp_port.direction, _msp_port.cmd_msp);
+            break;
+    }
+    hal.console->printf(" data:");
+    for (uint8_t i = 0; i < _msp_port.data_size; i++) {
+        uint8_t val = ((uint8_t*)_msp_port.in_buf)[i];
+        if (val >= 32 && val <= 126) {
+            hal.console->printf(" 0x%02X '%c'", val, (char)val);
+        } else {
+            hal.console->printf(" 0x%02X", val);
+        }
+    }
+    hal.console->printf("\n");
+#endif
+
     const MSPCommandResult status = msp_process_command(&command, &reply);
 
     if (status != MSP_RESULT_NO_REPLY) {
