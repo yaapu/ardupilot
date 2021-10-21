@@ -325,7 +325,16 @@ bool AP_RCProtocol_CRSF::decode_crsf_packet()
     hal.console->printf("CRSF: received %s:", get_frame_type(_frame.type));
     uint8_t* fptr = (uint8_t*)&_frame;
     for (uint8_t i = 0; i < _frame.length + 2; i++) {
-        hal.console->printf(" 0x%x", fptr[i]);
+        //hal.console->printf(" 0x%x", fptr[i]);
+#ifdef CRSF_DEBUG_CHARS
+        if (fptr[i] >= 32 && fptr[i] <= 126) {
+            hal.console->printf(" 0x%x '%c'", fptr[i], (char)fptr[i]);
+        } else {
+#endif
+            hal.console->printf(" 0x%x", fptr[i]);
+#ifdef CRSF_DEBUG_CHARS
+        }
+#endif
     }
     hal.console->printf("\n");
 #endif
