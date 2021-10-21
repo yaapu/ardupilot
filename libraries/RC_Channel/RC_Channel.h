@@ -468,6 +468,10 @@ public:
         return get_singleton() != nullptr && (_options & uint32_t(Option::CRSF_CUSTOM_TELEMETRY));
     }
 
+    bool crsf_elrs_mode(void) const {
+        return get_singleton() != nullptr && (_options & uint32_t(Option::CRSF_ELRS_MODE));
+    }
+
     // should a channel reverse option affect aux switches
     bool switch_reverse_allowed(void) const {
         return get_singleton() != nullptr && (_options & uint32_t(Option::ALLOW_SWITCH_REV));
@@ -560,6 +564,7 @@ protected:
         CRSF_CUSTOM_TELEMETRY   = (1U << 8), // use passthrough data for crsf telemetry
         SUPPRESS_CRSF_MESSAGE   = (1U << 9), // suppress CRSF mode/rate message for ELRS systems
         MULTI_RECEIVER_SUPPORT  = (1U << 10), // allow multiple receivers
+        CRSF_ELRS_MODE          = (1U << 11), // enable ELRS support
     };
 
     void new_override_received() {
