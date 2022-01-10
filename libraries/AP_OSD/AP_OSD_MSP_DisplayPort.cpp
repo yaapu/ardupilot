@@ -52,6 +52,14 @@ bool AP_OSD_MSP_DisplayPort::init(void)
 
 void AP_OSD_MSP_DisplayPort::clear(void)
 {
+    // check if we need to enable some options
+    // but only for actual OSD screens
+    if (_osd.get_current_screen() < AP_OSD_NUM_DISPLAY_SCREENS) {
+        const uint8_t hd_screen_resolution = _osd.screen[_osd.get_current_screen()].hd_resolution_enabled() ? 1 : 0;
+        const uint8_t hd_font_num = _osd.screen[_osd.get_current_screen()].get_hd_font_num();
+        _displayport->msp_displayport_set_options(hd_font_num, hd_screen_resolution);
+    }
+
     // clear remote MSP screen
     _displayport->msp_displayport_clear_screen();
 

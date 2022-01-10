@@ -1022,6 +1022,21 @@ const AP_Param::GroupInfo AP_OSD_Screen::var_info2[] = {
     // @Range: 0 15
     AP_SUBGROUPINFO(link_quality, "LINK_Q", 1, AP_OSD_Screen, AP_OSD_Setting),
 
+#if HAL_WITH_MSP_DISPLAYPORT
+    // @Param: HD_RES_EN
+    // @DisplayName: Enable HD resolution for this screen
+    // @Description: Sets the resolution for this screen to either LD 30x16 or HD 50x18
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Standard
+    AP_GROUPINFO("HD_RES_EN", 3, AP_OSD_Screen, enable_hd_resolution, 0),
+
+    // @Param: HD_FONT
+    // @DisplayName: Sets the HD font index for this screen
+    // @Description: Sets the HD font index for this screen
+    // @Range: 0 15
+    // @User: Standard
+    AP_GROUPINFO("HD_FONT", 4, AP_OSD_Screen, hd_font_num, 0),
+#endif
     AP_GROUPEND
 };
 

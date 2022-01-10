@@ -94,7 +94,14 @@ public:
 
 protected:
     bool check_option(uint32_t option);
-
+#ifdef HAL_WITH_MSP_DISPLAYPORT
+    virtual bool hd_resolution_enabled() const {
+        return false;
+    }
+    virtual uint8_t get_hd_font_num() const {
+        return 0;
+    }
+#endif
     enum unit_type {
         ALTITUDE=0,
         SPEED=1,
@@ -134,6 +141,14 @@ public:
     static const struct AP_Param::GroupInfo var_info[];
     static const struct AP_Param::GroupInfo var_info2[];
 
+#ifdef HAL_WITH_MSP_DISPLAYPORT
+    bool hd_resolution_enabled() const override {
+        return enable_hd_resolution == 1; // 0 low resolution, 1 high resolution
+    }
+    uint8_t get_hd_font_num() const override {
+        return hd_font_num;
+    }
+#endif
 private:
     friend class AP_MSP;
     friend class AP_MSP_Telem_Backend;
@@ -214,6 +229,12 @@ private:
     AP_OSD_Setting batt_bar{true, 1, 1};
     AP_OSD_Setting arming{true, 1, 1};
 
+#ifdef HAL_WITH_MSP_DISPLAYPORT
+    // Per screen HD resolution options (currently supported only by DisplayPort)
+    AP_Int8 enable_hd_resolution;
+    AP_Int8 hd_font_num;
+#endif
+
     void draw_altitude(uint8_t x, uint8_t y);
     void draw_bat_volt(uint8_t x, uint8_t y);
     void draw_avgcellvolt(uint8_t x, uint8_t y);
@@ -280,7 +301,6 @@ private:
     void draw_fence(uint8_t x, uint8_t y);
 #endif
     void draw_rngf(uint8_t x, uint8_t y);
-
 
     struct {
         bool load_attempted;
