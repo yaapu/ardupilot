@@ -320,6 +320,11 @@ void AP_OSD::init()
 #if OSD_ENABLED
 void AP_OSD::osd_thread()
 {
+    // DisplayPort backend does not use AP_MSP thread
+    // we need to re-init here to use the serial port
+    if (osd_types(osd_type.get()) == OSD_MSP_DISPLAYPORT) {
+        backend->init();
+    }
     while (true) {
         hal.scheduler->delay(100);
         update_osd();
