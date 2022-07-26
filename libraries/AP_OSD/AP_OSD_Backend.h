@@ -59,6 +59,9 @@ public:
     // called by the OSD thread once
     virtual void osd_thread_run_once() { return; }
 
+    // Default OSD thread scheduler delay is 10Hz
+    virtual uint8_t get_scheduler_delay_ms() const { return 100u; }
+
     AP_OSD * get_osd()
     {
         return &_osd;
