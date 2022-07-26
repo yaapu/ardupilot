@@ -19,6 +19,9 @@ public:
     //clear framebuffer
     void clear() override {};
 
+    // does this backend require 
+    bool is_draw_required() const override {return false;};    
+
 private:
     void setup_defaults(void);
 };
