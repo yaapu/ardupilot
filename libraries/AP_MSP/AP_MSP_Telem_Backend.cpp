@@ -43,6 +43,11 @@ constexpr uint8_t AP_MSP_Telem_Backend::arrows[8];
 
 using namespace MSP;
 
+#define MSP_DISPLAYPORT_DEBUG_ENABLED
+#ifdef MSP_DISPLAYPORT_DEBUG_ENABLED
+    uint16_t msp_displayport_commands_counter = 0;
+#endif
+
 AP_MSP_Telem_Backend::AP_MSP_Telem_Backend(AP_HAL::UARTDriver *uart) : AP_RCTelemetry(MSP_TIME_SLOT_MAX)
 {
     _msp_port.uart = uart;
@@ -1204,11 +1209,19 @@ void AP_MSP_Telem_Backend::msp_displayport_heartbeat()
     // a) ensure display is not released by remote OSD software
     // b) prevent OSD Slave boards from displaying a 'disconnected' status.
     msp_send_packet(MSP_DISPLAYPORT, MSP::MSP_V1, subcmd, sizeof(subcmd), false);
+#ifdef MSP_DISPLAYPORT_DEBUG_ENABLED
+    hal.console->printf("MSP: Displayport HB, commands=%u\n", msp_displayport_commands_counter);
+    msp_displayport_commands_counter++;
+#endif
 }
 
 void AP_MSP_Telem_Backend::msp_displayport_grab()
 {
     msp_displayport_heartbeat();
+#ifdef MSP_DISPLAYPORT_DEBUG_ENABLED
+    hal.console->printf("MSP: Displayport GRAB, commands=%u\n", msp_displayport_commands_counter);
+    msp_displayport_commands_counter++;
+#endif
 }
 
 void AP_MSP_Telem_Backend::msp_displayport_release()
@@ -1216,6 +1229,10 @@ void AP_MSP_Telem_Backend::msp_displayport_release()
     const uint8_t subcmd[] = { msp_displayport_subcmd_e::MSP_DISPLAYPORT_RELEASE };
 
     msp_send_packet(MSP_DISPLAYPORT, MSP::MSP_V1, subcmd, sizeof(subcmd), false);
+#ifdef MSP_DISPLAYPORT_DEBUG_ENABLED
+    hal.console->printf("MSP: Displayport RELEASE, commands=%u\n", msp_displayport_commands_counter);
+    msp_displayport_commands_counter++;
+#endif
 }
 
 void AP_MSP_Telem_Backend::msp_displayport_clear_screen()
@@ -1223,12 +1240,20 @@ void AP_MSP_Telem_Backend::msp_displayport_clear_screen()
     const uint8_t subcmd[] = { msp_displayport_subcmd_e::MSP_DISPLAYPORT_CLEAR_SCREEN };
 
     msp_send_packet(MSP_DISPLAYPORT, MSP::MSP_V1, subcmd, sizeof(subcmd), false);
+#ifdef MSP_DISPLAYPORT_DEBUG_ENABLED
+    hal.console->printf("MSP: Displayport CLEAR, commands=%u\n", msp_displayport_commands_counter);
+    msp_displayport_commands_counter++;
+#endif
 }
 
 void AP_MSP_Telem_Backend::msp_displayport_draw_screen()
 {
     const uint8_t subcmd[] = { msp_displayport_subcmd_e::MSP_DISPLAYPORT_DRAW_SCREEN };
     msp_send_packet(MSP_DISPLAYPORT, MSP::MSP_V1, subcmd, sizeof(subcmd), false);
+#ifdef MSP_DISPLAYPORT_DEBUG_ENABLED
+    hal.console->printf("MSP: Displayport *** DRAW ***, commands=%u\n", msp_displayport_commands_counter);
+    msp_displayport_commands_counter = 0;
+#endif
 }
 
 void AP_MSP_Telem_Backend::msp_displayport_write_string(uint8_t col, uint8_t row, bool blink, const char *string)
@@ -1252,6 +1277,10 @@ void AP_MSP_Telem_Backend::msp_displayport_write_string(uint8_t col, uint8_t row
     memcpy(packet.text, string, len);
 
     msp_send_packet(MSP_DISPLAYPORT, MSP::MSP_V1, &packet, 4 + len, false);
+#ifdef MSP_DISPLAYPORT_DEBUG_ENABLED
+    hal.console->printf("MSP: Displayport WRITE, commands=%u\n", msp_displayport_commands_counter);
+    msp_displayport_commands_counter++;
+#endif
 }
 
 void AP_MSP_Telem_Backend::msp_displayport_set_options(const uint8_t font_index, const uint8_t screen_resolution)
