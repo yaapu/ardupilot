@@ -43,7 +43,7 @@ constexpr uint8_t AP_MSP_Telem_Backend::arrows[8];
 
 using namespace MSP;
 
-#define MSP_DISPLAYPORT_DEBUG_ENABLED
+//#define MSP_DISPLAYPORT_DEBUG_ENABLED
 #ifdef MSP_DISPLAYPORT_DEBUG_ENABLED
     uint16_t msp_displayport_commands_counter = 0;
 #endif
