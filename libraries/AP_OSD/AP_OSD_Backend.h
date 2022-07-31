@@ -59,6 +59,9 @@ public:
     // called by the OSD thread once
     virtual void osd_thread_run_once() {return;};
 
+    // Default OSD thread scheduler delay is 10Hz
+    virtual uint8_t get_scheduler_delay_ms() const {return 100u;};
+
     // does this backend require the screen to be drawn by the OSD thread
     virtual bool is_draw_required() const {return true;};
 

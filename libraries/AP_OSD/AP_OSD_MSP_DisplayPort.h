@@ -28,6 +28,8 @@ public:
     // used to initialize the uart in the correct thread
     void osd_thread_run_once() override;
 
+     // DisplayPort OSD thread scheduler delay is 5Hz
+    uint8_t get_scheduler_delay_ms() const override {return 200u;};
 
 protected:
     uint8_t format_string_for_osd(char* dst, uint8_t size, bool decimal_packed, const char *fmt, va_list ap) override;
