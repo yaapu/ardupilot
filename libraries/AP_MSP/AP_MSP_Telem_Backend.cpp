@@ -603,6 +603,19 @@ void AP_MSP_Telem_Backend::msp_handle_airspeed(const MSP::msp_airspeed_data_mess
 #endif
 }
 
+uint32_t AP_MSP_Telem_Backend::get_osd_flight_mode_bitmask(void)
+{
+    uint32_t mode_mask = 0;
+    const AP_Notify& notify = AP::notify();
+
+    // set arming status
+    // Note: BOXARM bit is the same for DJI,BF and INAV
+    if (notify.flags.armed) {
+        BIT_SET(mode_mask, 0U);
+    }
+    return mode_mask;
+}
+
 MSPCommandResult AP_MSP_Telem_Backend::msp_process_out_api_version(sbuf_t *dst)
 {
     const struct {
