@@ -48,7 +48,8 @@
 // betaflight/src/main/io/displayport_msp.c
 #define OSD_MSP_DISPLAYPORT_MAX_STRING_LENGTH 30
 
-#define MSP_DEBUG_ENABLED
+//#define MSP_DEBUG_ENABLED
+//#define MSP_DATA_DEBUG_ENABLED
 
 class AP_MSP_Telem_Backend;
 

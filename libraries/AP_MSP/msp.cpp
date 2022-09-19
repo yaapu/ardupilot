@@ -49,6 +49,7 @@ uint32_t MSP::msp_serial_send_frame(msp_port_t *msp, const uint8_t * hdr, uint32
             hal.console->printf(" 0x%02X", val);
         }
     }
+#ifdef MSP_DATA_DEBUG_ENABLED
     hal.console->printf(" data:");
     for (uint8_t i = 0; i < data_len; i++) {
         uint8_t val = ((uint8_t*)data)[i];
@@ -63,6 +64,7 @@ uint32_t MSP::msp_serial_send_frame(msp_port_t *msp, const uint8_t * hdr, uint32
         uint8_t val = ((uint8_t*)crc)[i];
         hal.console->printf(" 0x%02X", val);
     }
+#endif
     hal.console->printf("\n");
 #endif
     // Transmit frame
