@@ -411,6 +411,7 @@ void AP_MSP_Telem_Backend::msp_process_received_command()
             hal.console->printf(" 'M' '%c' %02X", _msp_port.direction, _msp_port.cmd_msp);
             break;
     }
+#ifdef MSP_DATA_DEBUG_ENABLED
     hal.console->printf(" data:");
     for (uint8_t i = 0; i < _msp_port.data_size; i++) {
         uint8_t val = ((uint8_t*)_msp_port.in_buf)[i];
@@ -420,6 +421,7 @@ void AP_MSP_Telem_Backend::msp_process_received_command()
             hal.console->printf(" 0x%02X", val);
         }
     }
+#endif
     hal.console->printf("\n");
 #endif
 
