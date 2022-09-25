@@ -144,9 +144,18 @@ define HAL_BOARD_TERRAIN_DIRECTORY "/APM/TERRAIN"
 
 # setup for OSD
 define OSD_ENABLED 1
-define OSD_PARAM_ENABLED 0
+define OSD_PARAM_ENABLED 1
 define HAL_OSD_TYPE_DEFAULT 1
 ROMFS_WILDCARD libraries/AP_OSD/fonts/font*.bin
+
+# enable
+define HAL_MSP_ENABLED 1
+define HAL_WITH_MSP_DISPLAYPORT 1
+define HAL_CRSF_ENABLED 1
+define HAL_CRSF_TELEM_ENABLED 1
+define HAL_CRSF_TELEM_TEXT_SELECTION_ENABLED 1
+define HAL_RUNCAM_ENABLED 1
+define SMARTAUDIO_ENABLED 1
 
 define STM32_PWM_USE_ADVANCED TRUE
 
@@ -159,7 +168,6 @@ define HAL_SPRAYER_ENABLED 0
 
 # save FLASH, but leave above when flash issue is fixed
 define HAL_MINIMIZE_FEATURES 1
-
 
 # reduce max size of embedded params for apj_tool.py
 define AP_PARAM_MAX_EMBEDDED_PARAM 1024
