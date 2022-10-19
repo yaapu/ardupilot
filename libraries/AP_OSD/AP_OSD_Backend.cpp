@@ -16,6 +16,7 @@
 
 #include <AP_OSD/AP_OSD_Backend.h>
 #include <AP_HAL/Util.h>
+#include <AP_Logger/AP_Logger.h>
 #include <ctype.h>
 
 extern const AP_HAL::HAL& hal;
@@ -86,6 +87,7 @@ void AP_OSD_Backend::write(uint8_t x, uint8_t y, bool blink, const char *fmt, ..
     IGNORE_RETURN(format_string_for_osd(buff, sizeof(buff), check_option(AP_OSD::OPTION_DECIMAL_PACK), fmt, ap));
     va_end(ap);
     // buff is null terminated, this call should be safe without further checks
+    log_write(x,y,buff);
     write(x, y, buff);
 #endif
 }
@@ -122,4 +124,39 @@ FileData *AP_OSD_Backend::load_font_data(uint8_t font_num)
 void AP_OSD_Backend::init_symbol_set(uint8_t *lookup_table, const uint8_t size)
 {
     memcpy(lookup_table, symbols, size);
+}
+
+void AP_OSD_Backend::log_clear()
+{
+    //hal.console->printf("log_clear()\n");
+    AP::logger().Write("OSD", "TimeUS,CMD,X,Y,TEXT", "QbbbZ",
+                                        AP_HAL::micros64(),
+                                        'C',
+                                        0,
+                                        0,
+                                        "");
+}
+
+void AP_OSD_Backend::log_flush()
+{
+    //hal.console->printf("log_flush()\n");
+    AP::logger().Write("OSD", "TimeUS,CMD,X,Y,TEXT", "QbbbZ",
+                                        AP_HAL::micros64(),
+                                        'F',
+                                        0,
+                                        0,
+                                        "");
+}
+
+void AP_OSD_Backend::log_write(uint8_t x, uint8_t y, const char *text)
+{
+    //hal.console->printf("log_write()\n");
+    if (text == nullptr)
+        return;
+    AP::logger().Write("OSD", "TimeUS,CMD,X,Y,TEXT", "QbbbZ",
+                                        AP_HAL::micros64(),
+                                        'W',
+                                        x,
+                                        y,
+                                        text);
 }

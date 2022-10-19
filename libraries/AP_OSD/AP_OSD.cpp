@@ -331,7 +331,7 @@ void AP_OSD::osd_thread()
 
 void AP_OSD::update_osd()
 {
-    backend->clear();
+    backend->clear_screen();
 
     if (!_disable) {
         update_stats();
@@ -344,7 +344,7 @@ void AP_OSD::update_osd()
         }
     }
 
-    backend->flush();
+    backend->flush_screen();
 }
 
 //update maximums and totals

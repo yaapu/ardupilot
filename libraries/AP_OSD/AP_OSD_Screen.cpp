@@ -1461,8 +1461,7 @@ void AP_OSD_Screen::draw_message(uint8_t x, uint8_t y)
                 //trim invisible part
                 buffer[end_position] = 0;
             }
-
-            backend->write(x, y, buffer + start_position);
+            backend->write(x,y, false, "%s", buffer + start_position);
         }
     }
 }

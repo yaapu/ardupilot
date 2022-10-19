@@ -31,27 +31,23 @@ public:
     //destructor
     virtual ~AP_OSD_Backend(void) {}
 
-    //draw given text to framebuffer
-    virtual void write(uint8_t x, uint8_t y, const char* text) = 0;
-
     //draw formatted text to framebuffer
-    virtual void write(uint8_t x, uint8_t y, bool blink, const char *fmt, ...) FMT_PRINTF(5, 6);
-
-    //initilize framebuffer and underlying hardware
-    virtual bool init() = 0;
+    void write(uint8_t x, uint8_t y, bool blink, const char *fmt, ...) FMT_PRINTF(5, 6);
 
     //update screen
-    virtual void flush() = 0;
+    void flush_screen() {
+        log_flush();
+        flush();
+    }
+
+    //should match hw blink
+    void clear_screen() {
+        log_clear();
+        clear();
+    }
 
     // return a correction factor used to display angles correctly
     virtual float get_aspect_ratio_correction() const {return 1;}
-
-    //clear screen
-    //should match hw blink
-    virtual void clear()
-    {
-        blink_phase = (blink_phase+1)%4;
-    };
 
     // copy the backend specific symbol set to the OSD lookup table
     virtual void init_symbol_set(uint8_t *symbols, const uint8_t size);
@@ -67,6 +63,22 @@ public:
 protected:
     AP_OSD& _osd;
 
+    //initilize framebuffer and underlying hardware
+    virtual bool init() = 0;
+
+    //update screen
+    virtual void flush() = 0;
+
+    //draw given text to framebuffer
+    virtual void write(uint8_t x, uint8_t y, const char* text) = 0;
+
+    //clear screen
+    //should match hw blink
+    virtual void clear()
+    {
+        blink_phase = (blink_phase+1)%4;
+    };
+
     // get font choice
     uint8_t get_font_num(void) const
     {
@@ -78,6 +90,11 @@ protected:
     {
         return (_osd.options & option) != 0;
     }
+
+    // OSD Logging support
+    void log_write(uint8_t x, uint8_t y, const char* text);
+    void log_flush();
+    void log_clear();
 
     uint8_t convert_to_decimal_packed_characters(char* buff, uint8_t size);
     virtual uint8_t format_string_for_osd(char* dst, uint8_t size, bool decimal_packed, const char *fmt, va_list ap);
