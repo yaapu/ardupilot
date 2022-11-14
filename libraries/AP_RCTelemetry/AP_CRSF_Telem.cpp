@@ -148,7 +148,13 @@ void AP_CRSF_Telem::update_custom_telemetry_rates(AP_RCProtocol_CRSF::RFMode rf_
         return;
     }
 
+    AP_Frsky_SPort_Passthrough* passthrough = AP::frsky_passthrough_telem();
+    if (passthrough == nullptr) {
+        return;
+    }
+
     if (is_high_speed_telemetry(rf_mode)) {
+        passthrough->set_scheduler_entry_min_period(AP_Frsky_SPort_Passthrough::ATTITUDE, 350); // 3Hz
         // standard telemetry for high data rates
         set_scheduler_entry(BATTERY, 1000, 1000);       // 1Hz
         set_scheduler_entry(ATTITUDE, 1000, 1000);      // 1Hz
@@ -157,19 +163,17 @@ void AP_CRSF_Telem::update_custom_telemetry_rates(AP_RCProtocol_CRSF::RFMode rf_
         set_scheduler_entry(PASSTHROUGH, 100, 100);    // 8Hz
         set_scheduler_entry(STATUS_TEXT, 200, 750);    // 1.5Hz
     } else {
-        // standard telemetry for low data rates
+        // telemetry for low data rates
+        set_scheduler_entry(GPS, 550, 1000);            // 1.0Hz
+        set_scheduler_entry(STATUS_TEXT, 500, 2000);    // 0.5Hz
         set_scheduler_entry(BATTERY, 1000, 2000);       // 0.5Hz
         set_scheduler_entry(ATTITUDE, 1000, 3000);      // 0.33Hz
         if (_crsf_version.is_elrs) {
-            // ELRS custom telemetry for low data rates
-            set_scheduler_entry(GPS, 550, 1000);            // 1.0Hz
-            set_scheduler_entry(PASSTHROUGH, 350, 500);     // 2.0Hz
-            set_scheduler_entry(STATUS_TEXT, 500, 2000);    // 0.5Hz
+            passthrough->set_scheduler_entry_min_period(AP_Frsky_SPort_Passthrough::ATTITUDE, 500); // 2Hz
+            set_scheduler_entry(PASSTHROUGH, 350, 500); // 2.0Hz
         } else {
-            // CRSF custom telemetry for low data rates
-            set_scheduler_entry(GPS, 550, 1000);              // 1.0Hz
-            set_scheduler_entry(PASSTHROUGH, 500, 3000);      // 0.3Hz
-            set_scheduler_entry(STATUS_TEXT, 600, 2000);      // 0.5Hz
+            passthrough->set_scheduler_entry_min_period(AP_Frsky_SPort_Passthrough::ATTITUDE, 3000); // 0.3Hz
+            set_scheduler_entry(PASSTHROUGH, 800, 1500);// 0.5Hz
         }
     }
 }
@@ -439,8 +443,7 @@ void AP_CRSF_Telem::process_packet(uint8_t idx)
             } else {
                 // on slower links we pack many passthrough
                 // frames in a single crossfire one (up to 9)
-                const uint8_t size = _crsf_version.is_elrs ? 3 : AP_CRSF_Telem::PASSTHROUGH_MULTI_PACKET_FRAME_MAX_SIZE;
-                get_multi_packet_passthrough_telem_data(size);
+                get_multi_packet_passthrough_telem_data(3);
             }
             break;
         case STATUS_TEXT:

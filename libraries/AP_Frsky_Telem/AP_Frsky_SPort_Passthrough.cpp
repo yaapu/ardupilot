@@ -842,7 +842,8 @@ bool AP_Frsky_SPort_Passthrough::get_telem_data(sport_packet_t* packet_array, ui
         uint32_t item_mask = 0;
         for (uint8_t i=0; i<max_size; i++) {
             // call the scheduler with the shaper "disabled"
-            const uint8_t item = run_wfq_scheduler(false);
+            //const uint8_t item = run_wfq_scheduler(false);
+            const uint8_t item = run_wfq_scheduler();
             if (!BIT_IS_SET(item_mask, item) && external_data.pending) {
                 // ok got some data, flip the bitmask bit to prevent adding the same packet type more than once
                 BIT_SET(item_mask, item);
