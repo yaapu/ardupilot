@@ -91,6 +91,7 @@ void AP_CRSF_Telem::setup_wfq_scheduler(void)
     add_scheduler_entry(5, 20);     // command          50Hz (generally not active unless requested by the TX)
     add_scheduler_entry(5, 500);    // version ping      2Hz (only active at startup)
     add_scheduler_entry(5, 100);    // device ping      10Hz (only active during TX loss, also see CRSF_RX_TIMEOUT)
+    add_scheduler_entry(100, 250);  // vario             4Hz
     disable_scheduler_entry(DEVICE_PING);
 }
 
@@ -152,6 +153,7 @@ void AP_CRSF_Telem::update_custom_telemetry_rates(AP_RCProtocol_CRSF::RFMode rf_
         // standard telemetry for high data rates
         set_scheduler_entry(BATTERY, 1000, 1000);       // 1Hz
         set_scheduler_entry(ATTITUDE, 1000, 1000);      // 1Hz
+        set_scheduler_entry(VARIO, 1000, 1000);         // 1Hz
         // custom telemetry for high data rates
         set_scheduler_entry(GPS, 550, 500);            // 2.0Hz
         set_scheduler_entry(PASSTHROUGH, 100, 100);    // 8Hz
@@ -160,6 +162,7 @@ void AP_CRSF_Telem::update_custom_telemetry_rates(AP_RCProtocol_CRSF::RFMode rf_
         // standard telemetry for low data rates
         set_scheduler_entry(BATTERY, 1000, 2000);       // 0.5Hz
         set_scheduler_entry(ATTITUDE, 1000, 3000);      // 0.33Hz
+        set_scheduler_entry(VARIO, 1000, 3000);         // 0.33Hz
         if (_crsf_version.is_elrs) {
             // ELRS custom telemetry for low data rates
             set_scheduler_entry(GPS, 550, 1000);            // 1.0Hz
@@ -314,6 +317,7 @@ void AP_CRSF_Telem::disable_tx_entries()
     disable_scheduler_entry(ATTITUDE);
     disable_scheduler_entry(BATTERY);
     disable_scheduler_entry(GPS);
+    disable_scheduler_entry(VARIO);
     disable_scheduler_entry(FLIGHT_MODE);
     disable_scheduler_entry(PASSTHROUGH);
     disable_scheduler_entry(STATUS_TEXT);
@@ -328,6 +332,7 @@ void AP_CRSF_Telem::enable_tx_entries()
     enable_scheduler_entry(ATTITUDE);
     enable_scheduler_entry(BATTERY);
     enable_scheduler_entry(GPS);
+    enable_scheduler_entry(VARIO);
     enable_scheduler_entry(FLIGHT_MODE);
     enable_scheduler_entry(PASSTHROUGH);
     enable_scheduler_entry(STATUS_TEXT);
@@ -427,6 +432,9 @@ void AP_CRSF_Telem::process_packet(uint8_t idx)
             break;
         case GPS: // GPS
             calc_gps();
+            break;
+        case VARIO: // VARIO
+            calc_vario();
             break;
         case FLIGHT_MODE: // GPS
             calc_flight_mode();
@@ -972,6 +980,36 @@ void AP_CRSF_Telem::calc_device_ping(uint8_t destination) {
     _telem_size = 2;
     _telem_type = AP_RCProtocol_CRSF::CRSF_FRAMETYPE_PARAM_DEVICE_PING;
     _pending_request.frame_type = 0;
+
+    _telem_pending = true;
+}
+
+/*
+ * get vertical speed from ahrs, if not available fall back to baro climbrate, units is m/s
+ */
+float AP_CRSF_Telem::get_vspeed_ms(void) const
+{
+    {
+        // release semaphore as soon as possible
+        AP_AHRS &_ahrs = AP::ahrs();
+        Vector3f v;
+        WITH_SEMAPHORE(_ahrs.get_semaphore());
+        if (_ahrs.get_velocity_NED(v)) {
+            return -v.z;
+        }
+    }
+    auto &_baro = AP::baro();
+    WITH_SEMAPHORE(_baro.get_semaphore());
+    return _baro.get_climb_rate();
+}
+
+// prepare vario data
+void AP_CRSF_Telem::calc_vario()
+{
+    _telem.bcast.vario.v_speed = htobe16(roundf(get_vspeed_ms() * 100.0f)); // ( m/s * 100)
+
+    _telem_size = sizeof(AP_CRSF_Telem::VarioFrame);
+    _telem_type = AP_RCProtocol_CRSF::CRSF_FRAMETYPE_VARIO;
 
     _telem_pending = true;
 }

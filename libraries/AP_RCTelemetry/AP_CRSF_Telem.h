@@ -109,6 +109,10 @@ public:
         char flight_mode[16]; // ( Null-terminated string )
     };
 
+    struct PACKED VarioFrame {
+        int16_t v_speed;    // ( m/s * 100 )
+    };
+
     // CRSF_FRAMETYPE_COMMAND
     struct PACKED CommandFrame {
         uint8_t destination;
@@ -215,6 +219,7 @@ public:
         AttitudeFrame attitude;
         FlightModeFrame flightmode;
         APCustomTelemFrame custom_telem;
+        VarioFrame vario;
     };
 
     union PACKED ExtendedFrame {
@@ -265,6 +270,7 @@ private:
         GENERAL_COMMAND,
         VERSION_PING,
         DEVICE_PING,
+        VARIO,
         NUM_SENSORS
     };
 
@@ -281,6 +287,8 @@ private:
     void calc_gps();
     void calc_attitude();
     void calc_flight_mode();
+    float get_vspeed_ms() const;
+    void calc_vario();
     void calc_device_info();
     void calc_device_ping(uint8_t destination);
     void calc_command_response();
