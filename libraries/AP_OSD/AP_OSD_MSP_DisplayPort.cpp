@@ -22,6 +22,14 @@
 
 #if HAL_WITH_MSP_DISPLAYPORT
 
+#define DISPLAYPORT_DEBUG 
+
+#ifdef DISPLAYPORT_DEBUG
+#define debug(fmt, args...)	hal.console->printf("MSP: " fmt "\n", ##args)
+#else
+# define debug(fmt, args...)	do {} while(0)
+#endif
+
 #include <GCS_MAVLink/GCS.h>
 
 static const struct AP_Param::defaults_table_struct defaults_table[] = {
@@ -91,6 +99,7 @@ void AP_OSD_MSP_DisplayPort::write(uint8_t x, uint8_t y, const char* text)
         uint8_t last_inav_table = 0xFF; // 0xFF == unknown
         uint8_t x_offset = 0;
         const uint8_t max_idx = MIN((uint8_t)(strlen(text)-1), DISPLAYPORT_WRITE_BUFFER_MAX_LEN-2);
+        debug("ORIG: (%d,%d) --> \"%s\",len=%d", x , y, text, max_idx);
 
         while (text[idx] != 0 && idx <= max_idx)
         {
@@ -104,7 +113,8 @@ void AP_OSD_MSP_DisplayPort::write(uint8_t x, uint8_t y, const char* text)
             if (inav_table != last_inav_table)
             {
                 displayport_write_buffer[buf_idx] = 0x00; // add a terminator
-                _displayport->msp_displayport_write_string(x + x_offset, y, 0, displayport_write_buffer);
+                _displayport->msp_displayport_write_string(x + x_offset, y, false, displayport_write_buffer, inav_table);
+                debug("INAV:(%d,%d) --> \"%s\",%d", x + x_offset, y, displayport_write_buffer,inav_table);
                 x_offset += buf_idx;
                 buf_idx = 0;
                 last_inav_table = inav_table;
@@ -115,12 +125,14 @@ void AP_OSD_MSP_DisplayPort::write(uint8_t x, uint8_t y, const char* text)
             if (idx == max_idx) {
                 // flush when we detect end of string
                 displayport_write_buffer[buf_idx] = 0x00; // add a terminator
-                _displayport->msp_displayport_write_string(x, y, 0, displayport_write_buffer);
+                _displayport->msp_displayport_write_string(x, y, false, displayport_write_buffer, inav_table);
+                debug("INAV:(%d,%d) --> \"%s\",%d", x + x_offset, y, displayport_write_buffer,inav_table);
             }
             idx++;
         }
     } else {
-        _displayport->msp_displayport_write_string(x, y, 0, text);
+        //debug("(%d,%d) --> \"%s\",%d", x , y, text, 0);
+        _displayport->msp_displayport_write_string(x, y, false, text, 0);
     }
 }
 
